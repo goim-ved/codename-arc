@@ -9,20 +9,20 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 3
+- Last updated: 2026-09-03, session 4
 
 ## Current State
-- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model` and `admittance` modules compiles cleanly with Rust 1.98.0 (MSVC).
+- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, and `solver::dc` modules compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 16 passed (14 unit tests in `arc-core`, 1 in `arc-cli`, 1 integration test `ybus_oracle_validation`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 22 passed (19 unit tests in `arc-core`, 1 in `arc-cli`, 2 integration tests `ybus_oracle_validation` & `dc_oracle_validation`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
-  - Python oracle runner `scripts/oracle_check.py --case case3 --dump-ybus` matches Rust `YBus` values to $10^{-9}$ precision (verified 2026-09-03).
+  - Python oracle runner `scripts/oracle_check.py --case case3 --mode dc` matches Rust `DCPowerFlow` voltages, angles, and line flows to $< 10^{-6}$ tolerance (verified 2026-09-03).
 - What is stubbed, fake, or not implemented:
-  - DC linear power flow solver not yet created (M3).
   - AC Newton-Raphson polar power flow solver not yet created (M4).
-- Current milestone: M2 — Y-bus admittance matrix builder
-- Milestone status: done (verified via hand derivation and oracle cross-validation integration test). M3 ready to begin.
+  - Standard MATPOWER / IEEE case parser not yet created (M5).
+- Current milestone: M3 — DC power flow (linear, dense)
+- Milestone status: done (verified via hand derivation and pandapower DC oracle cross-validation). M4 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
@@ -48,20 +48,78 @@
 - `arc-core/src/lib.rs` — Root module for arc-core with re-exports
 - `arc-core/src/model.rs` — Bus, Branch, Generator, Load, and Network types with per-unit conversions
 - `arc-core/src/admittance.rs` — Bus admittance matrix ($Y_{\text{bus}}$) builder and tests
+- `arc-core/src/linear.rs` — Deterministic dense linear system solver ($A x = b$) with partial pivoting
+- `arc-core/src/solver/mod.rs` — Solver module definitions and re-exports
+- `arc-core/src/solver/dc.rs` — Linear DC power flow solver ($B\theta = P$) and tests
 - `arc-core/tests/ybus_oracle_validation.rs` — Integration test cross-validating Y-bus against pandapower oracle
+- `arc-core/tests/dc_oracle_validation.rs` — Integration test cross-validating DC power flow against pandapower oracle
 - `arc-cli/Cargo.toml` — Crate definition for command line interface
 - `arc-cli/src/main.rs` — Entry point for CLI binary
 - `scripts/oracle_check.py` — Pandapower numerical oracle runner for case cross-validation and Y-bus dumping
 
 ## Known Issues / Gaps
-- None for M2. Y-bus construction verified against hand-calculated ground truth and external oracle.
+- None for M3. Linear DC solve and branch flows verified against pandapower oracle.
 
 ## Next Steps
-1. Begin Milestone 3 (M3): Implement linear DC power flow ($B\theta = P$).
-2. Implement dense LU or Gaussian elimination solve on $B_{\text{bus}} \theta = P$ for non-slack buses.
-3. Cross-validate DC voltage angles and branch flows against `scripts/oracle_check.py --case case3 --mode dc`.
+1. Begin Milestone 4 (M4): Implement AC power flow using polar Newton-Raphson algorithm with dense Jacobian.
+2. Formulate mismatch vectors $\Delta P(\mathbf{V}, \boldsymbol{\theta})$ and $\Delta Q(\mathbf{V}, \boldsymbol{\theta})$.
+3. Assemble 4-block Jacobian $J = \begin{bmatrix} H & N \\ M & L \end{bmatrix}$.
+4. Validate convergence and compare against pandapower AC oracle and DC ballpark sanity checks.
 
 ## Session Log (append-only, newest entry at top — never delete history)
+### Session 4 — 2026-09-03
+- Did:
+  - Verified M1 and M2 test suite and formatting integrity.
+  - Implemented Milestone 3: Deterministic dense linear solver using Gaussian elimination with partial pivoting in `arc-core/src/linear.rs`.
+  - Implemented linear DC power flow solver in `arc-core/src/solver/dc.rs`:
+    - Assembled $B_{\text{bus}}$ matrix with transformer taps and phase shifts.
+    - Partitioned out the reference Slack bus to solve the non-slack reduced system $B_{\mathcal{NS}, \mathcal{NS}} \boldsymbol{\theta}_{\mathcal{NS}} = \mathbf{P}_{\text{eff}, \mathcal{NS}}$.
+    - Solved Slack bus generation and active branch flows ($P_{\text{from}}, P_{\text{to}}$).
+  - Derived analytical hand solution for the 3-bus network ($\theta_1 = -0.004\text{ rad}$, $\theta_2 = 0.006\text{ rad}$, $P_{\text{slack}} = -10.0\text{ MW}$).
+  - Created integration test `arc-core/tests/dc_oracle_validation.rs` validating bus angles and branch flows against `pandapower 3.5.4` oracle.
+- Verified via:
+  - `cargo test --workspace` →
+    ```text
+    running 1 test
+    test tests::cli_scaffold_verification ... ok
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    running 19 tests
+    test linear::tests::test_dimension_mismatch ... ok
+    test admittance::tests::test_transformer_tap_ratio ... ok
+    test admittance::tests::test_line_charging_shunt_susceptance ... ok
+    test admittance::tests::test_hand_derived_2bus_ybus ... ok
+    test admittance::tests::test_out_of_service_branch_ignored ... ok
+    test admittance::tests::test_hand_derived_3bus_canonical_ybus ... ok
+    test linear::tests::test_singular_matrix_detection ... ok
+    test linear::tests::test_solve_2x2_system ... ok
+    test linear::tests::test_solve_3x3_identity ... ok
+    test model::tests::test_per_unit_base_conversions ... ok
+    test solver::dc::tests::test_canonical_3bus_dc_power_flow_hand_calculated ... ok
+    test model::tests::test_branch_series_admittance ... ok
+    test model::tests::test_bus_angle_conversions ... ok
+    test model::tests::test_generator_and_load_per_unit_power ... ok
+    test model::tests::test_canonical_3bus_network_construction ... ok
+    test model::tests::test_net_power_injection ... ok
+    test model::tests::test_offline_generator_and_load_ignored_in_injections ... ok
+    test model::tests::test_network_validation_errors ... ok
+    test tests::scaffold_verification ... ok
+    test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    running 1 test
+    test test_dc_power_flow_matches_pandapower_oracle_case3 ... ok
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    running 1 test
+    test test_ybus_matches_pandapower_oracle_case3 ... ok
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    ```
+  - `cargo clippy --workspace --all-targets -- -D warnings` → Clean (0 warnings).
+  - `cargo fmt --all -- --check` → Clean (formatting confirmed).
+- Did not do / deliberately deferred:
+  - Milestone 4 (AC Newton-Raphson solver) deferred to next milestone.
+- Next session should start with:
+  - Start Milestone 4 (M4): AC power flow (Newton-Raphson, dense Jacobian, polar coordinates).
 ### Session 3 — 2026-09-03
 - Did:
   - Implemented Milestone 2: `YBus` admittance matrix builder in `arc-core/src/admittance.rs`.
