@@ -9,10 +9,12 @@
 pub mod admittance;
 pub mod linear;
 pub mod model;
+pub mod solver;
 
 pub use admittance::YBus;
 pub use linear::{solve_dense_system, LinearSolverError};
 pub use model::{Branch, Bus, BusType, Generator, Load, ModelError, Network, DEFAULT_BASE_MVA};
+pub use solver::{DCBranchFlow, DCBusResult, DCPowerFlow, DCPowerFlowResult, SolverError};
 
 #[cfg(test)]
 mod tests {
