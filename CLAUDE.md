@@ -9,28 +9,31 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 6
+- Last updated: 2026-09-03, session 7
 
 ## Current State
-- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, `parser`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
+- What compiles right now: Complete workspace (`arc-core` library and `arc` CLI binary) with `model`, `admittance`, `linear`, `parser`, `regression`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 28 passed (22 unit tests in `arc-core`, 1 in `arc-cli`, 4 integration tests `ybus_oracle_validation`, `dc_oracle_validation`, `ac_oracle_validation`, and `benchmark_oracle_validation`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 29 passed (23 unit tests in `arc-core`, 1 in `arc-cli`, 5 integration tests `ybus_oracle_validation`, `dc_oracle_validation`, `ac_oracle_validation`, `benchmark_oracle_validation`, and `regression_harness`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
-  - IEEE 9-bus (`case9`) and IEEE 14-bus (`case14`) match pandapower 3.5.4 oracle to machine precision:
-    - `case9`: AC Vm MAE $3.58 \times 10^{-16}$ p.u., Va MAE $3.12 \times 10^{-16}$ rad; DC Va MAE $1.06 \times 10^{-17}$ rad.
-    - `case14`: AC Vm MAE $3.65 \times 10^{-16}$ p.u., Va MAE $4.71 \times 10^{-16}$ rad; DC Va MAE $2.49 \times 10^{-16}$ rad.
+  - `arc test` (`cargo run --bin arc -- test`): runs regression test harness across all 6 benchmark permutations (`case3`, `case9`, `case14` in AC and DC) and prints clean pass/fail table; 0 failures.
+  - IEEE benchmark errors against `pandapower 3.5.4` oracle:
+    - `case3`: AC Vm MAE $2.96 \times 10^{-16}$, Va MAE $4.68 \times 10^{-17}$; DC Va MAE $8.67 \times 10^{-19}$.
+    - `case9`: AC Vm MAE $3.58 \times 10^{-16}$, Va MAE $3.12 \times 10^{-16}$; DC Va MAE $1.06 \times 10^{-17}$.
+    - `case14`: AC Vm MAE $3.65 \times 10^{-16}$, Va MAE $4.71 \times 10^{-16}$; DC Va MAE $2.49 \times 10^{-16}$.
 - What is stubbed, fake, or not implemented:
-  - Automated numerical regression harness CLI runner (M6).
   - Sparse matrix LU / KLU solver for scaling beyond dense limits (M7).
-- Current milestone: M5 — Standard test case support (MATPOWER case9, case14)
-- Milestone status: done (verified via ADR-0002, tabular MATPOWER parser, and IEEE case9 / case14 cross-validation). M6 ready to begin.
+- Current milestone: M6 — Automated numerical regression test harness
+- Milestone status: done (verified via `arc test` CLI runner, GitHub Actions CI workflow, and integration test suite). M7 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo fmt --all -- --check`
+- Run regression harness CLI: `cargo run --bin arc -- test`
+- Run power flow CLI: `cargo run --bin arc -- run data/cases/case14.m`
 - Benchmark oracle test: `cargo test --test benchmark_oracle_validation -- --nocapture`
 - Oracle cross-check AC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case9 --mode ac`
 - Oracle cross-check DC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case9 --mode dc`
@@ -44,7 +47,7 @@
 - `Cargo.toml` — Workspace root configuration for `arc-core` and `arc-cli`
 - `LICENSE` — Apache License 2.0
 - `.gitignore` — Ignore rules for Rust target directory, Python venv, and editor files
-- `.github/workflows/ci.yml` — GitHub Actions workflow for build, test, clippy, and rustfmt
+- `.github/workflows/ci.yml` — GitHub Actions workflow for build, test, clippy, rustfmt, and numerical regression
 - `README.md` — Project overview and human-facing status
 - `CLAUDE.md` — Agent working memory across sessions
 - `docs/adr/0001-prior-art-survey.md` — ADR evaluating existing power flow tools and justifying from-scratch core
@@ -56,6 +59,7 @@
 - `arc-core/src/linear.rs` — Deterministic dense linear system solver ($A x = b$) with partial pivoting
 - `arc-core/src/parser/mod.rs` — Parser module definitions and re-exports
 - `arc-core/src/parser/matpower.rs` — Tabular MATPOWER `.m` case parser
+- `arc-core/src/regression.rs` — Automated numerical regression harness engine and table formatter
 - `arc-core/src/solver/mod.rs` — Solver module definitions and re-exports
 - `arc-core/src/solver/dc.rs` — Linear DC power flow solver ($B\theta = P$) and tests
 - `arc-core/src/solver/ac.rs` — Non-linear AC Newton-Raphson polar power flow solver and tests
@@ -63,21 +67,42 @@
 - `arc-core/tests/dc_oracle_validation.rs` — Integration test cross-validating DC power flow against pandapower oracle
 - `arc-core/tests/ac_oracle_validation.rs` — Integration test cross-validating AC power flow against pandapower oracle and DC sanity checks
 - `arc-core/tests/benchmark_oracle_validation.rs` — Integration test cross-validating IEEE case9 and case14 across AC/DC solvers
+- `arc-core/tests/regression_harness.rs` — Integration test executing full automated numerical regression suite
 - `arc-cli/Cargo.toml` — Crate definition for command line interface
-- `arc-cli/src/main.rs` — Entry point for CLI binary
-- `data/cases/` — Bundled IEEE benchmark cases (`case9.m`, `case9.json`, `case14.m`, `case14.json`, oracle results)
+- `arc-cli/src/main.rs` — Entry point for CLI binary `arc` (`test`, `run`, `info`)
+- `data/cases/` — Bundled benchmark cases (`case3`, `case9`, `case14` in `.m`, `.json`, and oracle formats)
 - `scripts/oracle_check.py` — Pandapower numerical oracle runner for case cross-validation and Y-bus dumping
 - `scripts/export_cases.py` — Script exporting canonical pandapower networks to MATPOWER and arc Grid JSON
 
 ## Known Issues / Gaps
-- None for M5. Both IEEE 9-bus and 14-bus test cases converge in 4 iterations and match external oracle to machine precision.
+- None for M6. Automated regression test harness runs cleanly across all 3 networks and both formulations with 0 failures and sub-$10^{-15}$ errors.
 
 ## Next Steps
-1. Begin Milestone 6 (M6): Automated numerical regression test harness.
-2. Build regression harness verifying all cases (3-bus, 9-bus, 14-bus) against oracle benchmarks with structured error reporting.
-3. Expose regression verification command in `arc-cli`.
+1. Begin Milestone 7 (M7): Sparse Matrix & Linear Solver Upgrade.
+2. Formulate sparse matrix representation (CSR/CSC) for admittance and Jacobian structures.
+3. Benchmark dense vs sparse solve times across bus count.
 
 ## Session Log (append-only, newest entry at top — never delete history)
+### Session 7 — 2026-09-03
+- Did:
+  - Exported canonical 3-bus reference benchmark files (`case3.m`, `case3.json`, `case3_oracle.json`) to `data/cases/` via `scripts/export_cases.py`.
+  - Implemented automated numerical regression engine in `arc-core/src/regression.rs` (`RegressionHarness`, `RegressionReport`, `CaseRegressionResult`) comparing case results against pandapower oracle outputs across strict thresholds (< $10^{-5}$ Vm, < $10^{-4}$ Va).
+  - Implemented CLI subcommand `arc test` in `arc-cli/src/main.rs` to run regression harness and display aligned terminal table with exit codes.
+  - Implemented CLI subcommand `arc run <FILE> [--mode ac|dc]` to solve cases directly from command line.
+  - Added integration test `arc-core/tests/regression_harness.rs`.
+  - Updated GitHub Actions CI workflow (`.github/workflows/ci.yml`) to execute `cargo run --bin arc -- test` on every push and pull request.
+- Verified via:
+  - `cargo test --workspace` → 29 passed (23 in `arc-core`, 1 in `arc-cli`, 5 integration test suites), 0 failed.
+  - `cargo run --bin arc -- test` → ALL 6 BENCHMARKS PASSED (0 failures) with full formatted table.
+  - `cargo run --bin arc -- run data/cases/case14.m` → AC solved in 4 iterations with matching bus voltage profile.
+  - `cargo run --bin arc -- run data/cases/case14.m --mode dc` → DC solved in 1 iteration.
+  - `cargo clippy --workspace --all-targets -- -D warnings` → Clean (0 warnings).
+  - `cargo fmt --all -- --check` → Clean (formatting confirmed).
+- Did not do / deliberately deferred:
+  - Milestone 7 (Sparse solver upgrade) deferred to next milestone.
+- Next session should start with:
+  - Start Milestone 7 (M7): Sparse matrix and linear solver upgrade.
+
 ### Session 6 — 2026-09-03
 - Did:
   - Wrote and committed ADR-0002 on test case format selection (`docs/adr/0002-case-format.md`).

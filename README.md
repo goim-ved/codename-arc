@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 5 complete (standard test case support: IEEE case9 and case14 solved with AC & DC and validated against pandapower oracle to MAE < 1e-15; 28 passing tests); Milestone 6 (numerical regression test harness) ready to start.
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 6 complete (automated numerical regression test harness across all benchmark networks integrated into CI and arc CLI; 29 passing tests); Milestone 7 (sparse matrix & linear solver upgrade) ready to start.
 
 ## Try it
 
@@ -21,26 +21,32 @@ Once the Rust toolchain is installed:
 # Build the workspace
 cargo build --workspace
 
-# Run tests
+# Run full test suite across workspace (29 passing tests)
 cargo test --workspace
 
-# Run the pandapower numerical oracle (requires Python virtualenv in .oracle-venv)
-python scripts/oracle_check.py --case case3 --mode ac
+# Run automated numerical regression harness
+cargo run --bin arc -- test
+
+# Solve power flow on an IEEE benchmark case
+cargo run --bin arc -- run data/cases/case14.m
+
+# Run the pandapower numerical oracle
+python scripts/oracle_check.py --case case14 --mode ac
 ```
 
 ## Roadmap
 
 Development proceeds strictly milestone-by-milestone, with each milestone verified against the numerical oracle before the next begins:
 
-- **M0 — Repo Scaffold & Prior Art Survey**: Cargo workspace, Apache-2.0 license, CI, ADR-0001, oracle environment. *(Current)*
-- **M1 — Core Data Model**: `Bus`, `Branch`, `Generator`, `Load` types with explicit per-unit conventions.
-- **M2 — Y-bus Admittance Matrix Builder**: Hand-derivation and unit tests for 3-bus network admittance.
-- **M3 — DC Power Flow (Linear, Dense)**: Linear $B\theta = P$ solve cross-validated against pandapower.
-- **M4 — AC Power Flow (Newton-Raphson, Dense)**: Polar Newton-Raphson solver cross-validated against oracle at $10^{-6}$ p.u. tolerance.
-- **M5 — Standard Test Case Support**: IEEE 9-bus and 14-bus case loading and solving.
-- **M6 — Formal Oracle Integration Harness**: Automated test suite diffing against frozen oracle fixtures.
-- **M7 — Sparse Solver**: Transition dense linear solve to high-performance sparse factorization (`faer`/sparse).
-- **M8 — CLI**: `arc solve <case-file>` interface.
+- **M0 — Repo Scaffold & Prior Art Survey**: Cargo workspace, Apache-2.0 license, CI, ADR-0001, oracle environment. *(Done)*
+- **M1 — Core Data Model**: `Bus`, `Branch`, `Generator`, `Load` types with explicit per-unit conventions. *(Done)*
+- **M2 — Y-bus Admittance Matrix Builder**: Hand-derivation and unit tests for 3-bus network admittance. *(Done)*
+- **M3 — DC Power Flow (Linear, Dense)**: Linear $B\theta = P$ solve cross-validated against pandapower. *(Done)*
+- **M4 — AC Power Flow (Newton-Raphson, Dense)**: Polar Newton-Raphson solver cross-validated against oracle at $10^{-6}$ p.u. tolerance. *(Done)*
+- **M5 — Standard Test Case Support**: IEEE 9-bus and 14-bus case loading and solving. *(Done)*
+- **M6 — Automated Numerical Regression Test Harness**: Automated suite running in CI and CLI across all cases. *(Done)*
+- **M7 — Sparse Matrix & Linear Solver Upgrade**: Sparse LU factorization (KLU/Faer/Sprs) for scaling. *(Next)*
+- **M8 — CLI & Ergonomics**: Full `arc solve <case-file>` interface and parameter overrides.
 - **M9 — Determinism & Benchmark Baseline**: Bit-diff testing in CI and Criterion performance baseline.
 - **M10 — v0.1 Garage Release**: Tagged v0.1.0 release note and frozen benchmark.
 
