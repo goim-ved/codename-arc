@@ -9,20 +9,21 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 4
+- Last updated: 2026-09-03, session 5
 
 ## Current State
-- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, and `solver::dc` modules compiles cleanly with Rust 1.98.0 (MSVC).
+- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 22 passed (19 unit tests in `arc-core`, 1 in `arc-cli`, 2 integration tests `ybus_oracle_validation` & `dc_oracle_validation`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 24 passed (20 unit tests in `arc-core`, 1 in `arc-cli`, 3 integration tests `ybus_oracle_validation`, `dc_oracle_validation`, and `ac_oracle_validation`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
-  - Python oracle runner `scripts/oracle_check.py --case case3 --mode dc` matches Rust `DCPowerFlow` voltages, angles, and line flows to $< 10^{-6}$ tolerance (verified 2026-09-03).
+  - Python oracle runner `scripts/oracle_check.py --case case3 --mode ac` matches Rust `ACPowerFlow` voltages, angles, and branch flows to $< 10^{-6}$ tolerance (verified 2026-09-03).
+  - DC vs AC ballpark comparison test passes, confirming DC is a consistent approximation of AC on the 3-bus network.
 - What is stubbed, fake, or not implemented:
-  - AC Newton-Raphson polar power flow solver not yet created (M4).
   - Standard MATPOWER / IEEE case parser not yet created (M5).
-- Current milestone: M3 — DC power flow (linear, dense)
-- Milestone status: done (verified via hand derivation and pandapower DC oracle cross-validation). M4 ready to begin.
+  - Formal oracle test harness regression suite not yet created (M6).
+- Current milestone: M4 — AC power flow (Newton-Raphson, dense Jacobian, polar coordinates)
+- Milestone status: done (verified via quadratic convergence, pandapower AC oracle validation, and DC vs AC comparison). M5 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
@@ -51,22 +52,43 @@
 - `arc-core/src/linear.rs` — Deterministic dense linear system solver ($A x = b$) with partial pivoting
 - `arc-core/src/solver/mod.rs` — Solver module definitions and re-exports
 - `arc-core/src/solver/dc.rs` — Linear DC power flow solver ($B\theta = P$) and tests
+- `arc-core/src/solver/ac.rs` — Non-linear AC Newton-Raphson polar power flow solver and tests
 - `arc-core/tests/ybus_oracle_validation.rs` — Integration test cross-validating Y-bus against pandapower oracle
 - `arc-core/tests/dc_oracle_validation.rs` — Integration test cross-validating DC power flow against pandapower oracle
+- `arc-core/tests/ac_oracle_validation.rs` — Integration test cross-validating AC power flow against pandapower oracle and DC sanity checks
 - `arc-cli/Cargo.toml` — Crate definition for command line interface
 - `arc-cli/src/main.rs` — Entry point for CLI binary
 - `scripts/oracle_check.py` — Pandapower numerical oracle runner for case cross-validation and Y-bus dumping
 
 ## Known Issues / Gaps
-- None for M3. Linear DC solve and branch flows verified against pandapower oracle.
+- None for M4. Full non-linear AC Newton-Raphson solver converges quadratically to machine precision and matches external oracle.
 
 ## Next Steps
-1. Begin Milestone 4 (M4): Implement AC power flow using polar Newton-Raphson algorithm with dense Jacobian.
-2. Formulate mismatch vectors $\Delta P(\mathbf{V}, \boldsymbol{\theta})$ and $\Delta Q(\mathbf{V}, \boldsymbol{\theta})$.
-3. Assemble 4-block Jacobian $J = \begin{bmatrix} H & N \\ M & L \end{bmatrix}$.
-4. Validate convergence and compare against pandapower AC oracle and DC ballpark sanity checks.
+1. Begin Milestone 5 (M5): Standard test case support (MATPOWER case9 and case14).
+2. Record format choice in `docs/adr/0002-case-format.md`.
+3. Implement parser and solve both IEEE 9-bus and 14-bus cases with DC and AC solvers.
+4. Cross-validate case9 and case14 solutions against pandapower oracle.
 
 ## Session Log (append-only, newest entry at top — never delete history)
+### Session 5 — 2026-09-03
+- Did:
+  - Implemented Milestone 4: Non-linear AC Newton-Raphson solver in polar coordinates with dense analytical Jacobian in `arc-core/src/solver/ac.rs`.
+  - Formulated calculated powers $P_i(\mathbf{V}, \boldsymbol{\theta})$ and $Q_i(\mathbf{V}, \boldsymbol{\theta})$ and mismatches $\Delta P_i, \Delta Q_i$.
+  - Formulated 4-block analytical Jacobian $J = \begin{bmatrix} H & N \\ M & L \end{bmatrix}$ with exact derivative formulas.
+  - Implemented branch AC power flows ($P_{\text{from}}, Q_{\text{from}}, P_{\text{to}}, Q_{\text{to}}$) and system loss calculation.
+  - Added integration test `arc-core/tests/ac_oracle_validation.rs`:
+    - Validated convergence in 3 iterations to $10^{-8}$ mismatch.
+    - Verified bus voltages and angles against pandapower 3.5.4 oracle to $< 10^{-6}$ p.u.
+    - Verified line power flows and total system losses (~$0.598\text{ MW}$) against oracle to $< 10^{-4}\text{ MW}$.
+    - Performed DC vs AC ballpark sanity check confirming physical consistency between approximations.
+- Verified via:
+  - `cargo test --workspace` → 24 passed (20 in `arc-core`, 1 in `arc-cli`, 3 integration test suites), 0 failed.
+  - `cargo clippy --workspace --all-targets -- -D warnings` → Clean (0 warnings).
+  - `cargo fmt --all -- --check` → Clean (formatting confirmed).
+- Did not do / deliberately deferred:
+  - Milestone 5 (MATPOWER case9 and case14 parser) deferred to next milestone.
+- Next session should start with:
+  - Start Milestone 5 (M5): Standard test case support (case9, case14) and ADR-0002.
 ### Session 4 — 2026-09-03
 - Did:
   - Verified M1 and M2 test suite and formatting integrity.

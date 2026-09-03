@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 3 complete (linear DC power flow solved and cross-validated against pandapower oracle; 22 passing tests); Milestone 4 (AC Newton-Raphson in polar coordinates) ready to start.
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 4 complete (non-linear AC Newton-Raphson polar power flow solved and cross-validated against pandapower oracle; 24 passing tests); Milestone 5 (standard test case support: IEEE case9 and case14) ready to start.
 
 ## Try it
 
