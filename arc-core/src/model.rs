@@ -402,6 +402,60 @@ impl Load {
     }
 }
 
+/// Fixed shunt capacitor or reactor connected to a bus.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Shunt {
+    /// Unique shunt identifier.
+    pub id: usize,
+    /// Human-readable label.
+    pub name: Option<String>,
+    /// Bus identifier where shunt is connected.
+    pub bus: usize,
+    /// Shunt conductance in MW consumed at nominal voltage ($V = 1.0\text{ p.u.}$).
+    pub g_mw: f64,
+    /// Shunt susceptance in MVar injected at nominal voltage ($V = 1.0\text{ p.u.}$).
+    /// Positive for capacitive shunt (supplies MVar), negative for inductive shunt (absorbs MVar).
+    pub b_mvar: f64,
+    /// Service status (`true` = in-service, `false` = disconnected).
+    pub status: bool,
+}
+
+impl Shunt {
+    /// Creates a new active Shunt.
+    pub fn new(id: usize, bus: usize, g_mw: f64, b_mvar: f64) -> Self {
+        Self {
+            id,
+            name: None,
+            bus,
+            g_mw,
+            b_mvar,
+            status: true,
+        }
+    }
+
+    /// Sets human-readable name.
+    pub fn with_name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Sets connected status.
+    pub fn with_status(mut self, status: bool) -> Self {
+        self.status = status;
+        self
+    }
+
+    /// Conductance in per-unit: $g_{\text{pu}} = G_{\text{MW}} / S_{\text{base}}$.
+    pub fn g_pu(&self, base_mva: f64) -> f64 {
+        self.g_mw / base_mva
+    }
+
+    /// Susceptance in per-unit: $b_{\text{pu}} = B_{\text{MVar}} / S_{\text{base}}$.
+    pub fn b_pu(&self, base_mva: f64) -> f64 {
+        self.b_mvar / base_mva
+    }
+}
+
 /// Errors that can occur when constructing or validating power network models.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelError {
@@ -457,6 +511,8 @@ pub struct Network {
     pub generators: BTreeMap<usize, Generator>,
     /// Loads keyed by unique load id in strictly ascending order.
     pub loads: BTreeMap<usize, Load>,
+    /// Bus shunts (capacitors and reactors) keyed by unique shunt id in ascending order.
+    pub shunts: BTreeMap<usize, Shunt>,
 }
 
 impl Default for Network {
@@ -474,6 +530,7 @@ impl Network {
             branches: BTreeMap::new(),
             generators: BTreeMap::new(),
             loads: BTreeMap::new(),
+            shunts: BTreeMap::new(),
         }
     }
 
@@ -510,6 +567,12 @@ impl Network {
     /// Adds a load to the network.
     pub fn add_load(&mut self, load: Load) -> Result<(), ModelError> {
         self.loads.insert(load.id, load);
+        Ok(())
+    }
+
+    /// Adds a shunt to the network.
+    pub fn add_shunt(&mut self, shunt: Shunt) -> Result<(), ModelError> {
+        self.shunts.insert(shunt.id, shunt);
         Ok(())
     }
 
@@ -590,6 +653,12 @@ impl Network {
         for load in self.loads.values() {
             if !self.buses.contains_key(&load.bus) {
                 return Err(ModelError::BusNotFound(load.bus));
+            }
+        }
+
+        for shunt in self.shunts.values() {
+            if !self.buses.contains_key(&shunt.bus) {
+                return Err(ModelError::BusNotFound(shunt.bus));
             }
         }
 

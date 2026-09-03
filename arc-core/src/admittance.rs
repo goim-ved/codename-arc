@@ -142,6 +142,21 @@ impl YBus {
             b[ki] += b_ki;
         }
 
+        // Process bus shunts (capacitors and reactors)
+        for shunt in network.shunts.values() {
+            if !shunt.status {
+                continue;
+            }
+            let &idx = bus_index_map
+                .get(&shunt.bus)
+                .ok_or(ModelError::BusNotFound(shunt.bus))?;
+            let g_pu = shunt.g_pu(network.base_mva);
+            let b_pu = shunt.b_pu(network.base_mva);
+            let ii = idx * n + idx;
+            g[ii] += g_pu;
+            b[ii] += b_pu;
+        }
+
         Ok(Self {
             n,
             bus_ids,
@@ -433,7 +448,31 @@ mod tests {
         // Since the only branch is out of service, all entries should be 0.0
         assert_eq!(ybus.g_entry(0, 0), 0.0);
         assert_eq!(ybus.b_entry(0, 0), 0.0);
-        assert_eq!(ybus.g_entry(0, 1), 0.0);
-        assert_eq!(ybus.b_entry(0, 1), 0.0);
+        assert_eq!(ybus.g_entry(0, 0), 0.0);
+        assert_eq!(ybus.b_entry(0, 0), 0.0);
+        assert_eq!(ybus.g_entry(1, 1), 0.0);
+        assert_eq!(ybus.b_entry(1, 1), 0.0);
+    }
+
+    /// Bus shunt capacitor/reactor test:
+    /// Injected susceptance B_shunt (MVar) and conductance G_shunt (MW) add directly to diagonal.
+    #[test]
+    fn test_bus_shunt_admittance() {
+        use crate::model::Shunt;
+
+        let mut net = Network::new(100.0);
+        net.add_bus(Bus::new(0, BusType::Slack, 138.0)).unwrap();
+        net.add_bus(Bus::new(1, BusType::PQ, 138.0)).unwrap();
+
+        // Shunt at Bus 1: 5 MW, +19 MVar capacitor (B_pu = +0.19 pu, G_pu = +0.05 pu)
+        let shunt = Shunt::new(0, 1, 5.0, 19.0);
+        net.add_shunt(shunt).unwrap();
+
+        let ybus = YBus::build(&net).unwrap();
+
+        assert!((ybus.g_entry(1, 1) - 0.05).abs() < 1e-12);
+        assert!((ybus.b_entry(1, 1) - 0.19).abs() < 1e-12);
+        assert_eq!(ybus.g_entry(0, 0), 0.0);
+        assert_eq!(ybus.b_entry(0, 0), 0.0);
     }
 }

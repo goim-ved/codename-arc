@@ -13,7 +13,9 @@ pub mod solver;
 
 pub use admittance::YBus;
 pub use linear::{solve_dense_system, LinearSolverError};
-pub use model::{Branch, Bus, BusType, Generator, Load, ModelError, Network, DEFAULT_BASE_MVA};
+pub use model::{
+    Branch, Bus, BusType, Generator, Load, ModelError, Network, Shunt, DEFAULT_BASE_MVA,
+};
 pub use solver::{
     ACBranchFlow, ACBusResult, ACPowerFlow, ACPowerFlowOptions, ACPowerFlowResult, DCBranchFlow,
     DCBusResult, DCPowerFlow, DCPowerFlowResult, SolverError,
