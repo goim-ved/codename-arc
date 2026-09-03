@@ -10,6 +10,7 @@ pub mod admittance;
 pub mod linear;
 pub mod model;
 pub mod parser;
+pub mod regression;
 pub mod solver;
 
 pub use admittance::YBus;
@@ -18,6 +19,7 @@ pub use model::{
     Branch, Bus, BusType, Generator, Load, ModelError, Network, Shunt, DEFAULT_BASE_MVA,
 };
 pub use parser::{MatpowerParser, ParseError};
+pub use regression::{CaseRegressionResult, RegressionHarness, RegressionReport};
 pub use solver::{
     ACBranchFlow, ACBusResult, ACPowerFlow, ACPowerFlowOptions, ACPowerFlowResult, DCBranchFlow,
     DCBusResult, DCPowerFlow, DCPowerFlowResult, SolverError,

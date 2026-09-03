@@ -7,6 +7,4 @@ description = "Core data models, admittance matrix builders, and power flow solv
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-
-[dev-dependencies]
 serde_json = "1.0"
