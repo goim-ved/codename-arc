@@ -9,26 +9,20 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 8
+- Last updated: 2026-09-03, session 9
 
 ## Current State
 - What compiles right now: Complete workspace (`arc-core` library and `arc` CLI binary) with `model`, `admittance`, `linear`, `sparse`, `parser`, `regression`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 44 passed (32 unit tests in `arc-core`, 1 in `arc-cli`, 6 integration tests: `ybus_oracle_validation`, `dc_oracle_validation`, `ac_oracle_validation`, `benchmark_oracle_validation`, `sparse_scaling_benchmarks` [4 tests], and `regression_harness`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 52 passed (32 unit tests in `arc-core`, 2 in `arc-cli`, 7 integration tests in `cli_solve.rs`, 6 oracle/scaling/regression integration tests: `ybus_oracle_validation`, `dc_oracle_validation`, `ac_oracle_validation`, `benchmark_oracle_validation`, `sparse_scaling_benchmarks` [4 tests], and `regression_harness`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
   - `arc test` (`cargo run --bin arc -- test`): runs regression test harness across all 12 benchmark permutations (`case3`, `case9`, `case14`, `case30`, `case57`, `case118` in AC and DC) and prints clean pass/fail table with sparsity metrics; 0 failures.
-  - IEEE benchmark errors against `pandapower 3.5.4` oracle:
-    - `case3`: AC Vm MAE $2.96 \times 10^{-16}$, Va MAE $4.67 \times 10^{-17}$; DC Va MAE $2.89 \times 10^{-19}$ (0.0% sparsity).
-    - `case9`: AC Vm MAE $3.82 \times 10^{-16}$, Va MAE $3.68 \times 10^{-16}$; DC Va MAE $4.97 \times 10^{-17}$ (66.7% sparsity).
-    - `case14`: AC Vm MAE $3.97 \times 10^{-16}$, Va MAE $5.45 \times 10^{-17}$; DC Va MAE $2.58 \times 10^{-17}$ (72.4% sparsity).
-    - `case30`: AC Vm MAE $5.66 \times 10^{-16}$, Va MAE $6.14 \times 10^{-16}$; DC Va MAE $1.61 \times 10^{-17}$ (87.6% sparsity).
-    - `case57`: AC Vm MAE $7.40 \times 10^{-16}$, Va MAE $6.19 \times 10^{-16}$; DC Va MAE $3.99 \times 10^{-16}$ (93.3% sparsity).
-    - `case118`: AC Vm MAE $1.92 \times 10^{-8}$, Va MAE $7.67 \times 10^{-6}$; DC Va MAE $1.13 \times 10^{-7}$ (96.5% sparsity).
+  - `arc solve <case-file>` (`cargo run --bin arc -- solve data/cases/case14.m`): prints convergence status, total generation/load/losses, tabular bus voltages, and branch flows, with `--format json` support for automation.
 - What is stubbed, fake, or not implemented:
-  - Advanced parameter overrides (Q-limits, generator PV-PQ switching in M8).
-- Current milestone: M7 — Sparse matrix & linear solver upgrade
-- Milestone status: done (pure-Rust sparse LU with Markowitz threshold pivoting implemented in `arc-core::sparse`, integrated into DC and AC solvers, cross-validated on IEEE 14, 30, 57, 118 networks, and demonstrated scaling). M8 ready to begin.
+  - Advanced parameter overrides (Q-limits, generator PV-PQ switching in post-v0.1).
+- Current milestone: M8 — CLI & Ergonomics
+- Milestone status: done (`arc solve <FILE>` implemented with full flags `--mode`, `--solver`, `--tolerance`, `--max-iterations`, `--format table|json`, and integration test suite passing). M9 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
@@ -36,7 +30,8 @@
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo fmt --all -- --check`
 - Run regression harness CLI: `cargo run --bin arc -- test`
-- Run power flow CLI: `cargo run --bin arc -- run data/cases/case118.m --mode ac --solver sparse`
+- Run power flow CLI: `cargo run --bin arc -- solve data/cases/case14.m`
+- Run JSON output: `cargo run --bin arc -- solve data/cases/case14.m --format json`
 - Benchmark oracle test: `cargo test --test benchmark_oracle_validation -- --nocapture`
 - Sparse scaling benchmark: `cargo test --test sparse_scaling_benchmarks --release -- --nocapture`
 - Oracle cross-check AC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case14 --mode ac`
@@ -47,6 +42,7 @@
 - ADR-0001: Minimal from-scratch Newton-Raphson solver core selected over wrapping RustPower or external C/KLU crates to guarantee strict determinism and compatibility with future GridIR — docs/adr/0001-prior-art-survey.md
 - ADR-0002: Two-tier case representation adopting native `arc` Grid JSON (serde) alongside a lightweight tabular MATPOWER `.m` parser with bundled IEEE benchmark cases — docs/adr/0002-case-format.md
 - ADR-0003: Pure-Rust Sparse Matrix representation (`TripletList`, `CsrMatrix`) and Sparse direct LU solver with dynamic Markowitz threshold pivoting (`SparseLuSolver`) — docs/adr/0003-sparse-solver-selection.md
+- ADR-0004: Command-Line Interface (CLI) Ergonomics and Output Formats (`arc solve`, table/JSON outputs, exit codes) — docs/adr/0004-cli-interface.md
 
 ## File Manifest
 - `Cargo.toml` — Workspace root configuration for `arc-core` and `arc-cli`
