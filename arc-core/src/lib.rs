@@ -25,7 +25,7 @@ pub use solver::{
     ACBranchFlow, ACBusResult, ACPowerFlow, ACPowerFlowOptions, ACPowerFlowResult, DCBranchFlow,
     DCBusResult, DCPowerFlow, DCPowerFlowResult, SolverError,
 };
-pub use sparse::{CsrMatrix, SparseError, TripletList};
+pub use sparse::{CsrMatrix, SparseError, SparseLuSolver, TripletList};
 
 #[cfg(test)]
 mod tests {
