@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Repository scaffold initialized (M0); pandapower numerical oracle verified; core data models and solvers pending toolchain verification (M1+).
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 0 complete (Cargo workspace compiles cleanly, tests green, clippy clean, pandapower oracle verified, ADR-0001 accepted); Milestone 1 (core data model) ready to start.
 
 ## Try it
 
