@@ -1,0 +1,115 @@
+{
+  "base_mva": 100.0,
+  "buses": {
+    "0": {
+      "id": 0,
+      "name": "Bus 1",
+      "bus_type": "Slack",
+      "base_kv": 138.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "1": {
+      "id": 1,
+      "name": "Bus 2",
+      "bus_type": "PQ",
+      "base_kv": 138.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "2": {
+      "id": 2,
+      "name": "Bus 3",
+      "bus_type": "PV",
+      "base_kv": 138.0,
+      "vm_pu": 1.02,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    }
+  },
+  "branches": {
+    "0": {
+      "id": 0,
+      "name": "Branch 1-2",
+      "from_bus": 0,
+      "to_bus": 1,
+      "r_pu": 0.02,
+      "x_pu": 0.06,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 100.0,
+      "status": true
+    },
+    "1": {
+      "id": 1,
+      "name": "Branch 2-3",
+      "from_bus": 1,
+      "to_bus": 2,
+      "r_pu": 0.01,
+      "x_pu": 0.03,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 100.0,
+      "status": true
+    },
+    "2": {
+      "id": 2,
+      "name": "Branch 1-3",
+      "from_bus": 0,
+      "to_bus": 2,
+      "r_pu": 0.012000000000000002,
+      "x_pu": 0.036,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 100.0,
+      "status": true
+    }
+  },
+  "generators": {
+    "0": {
+      "id": 0,
+      "name": "Gen 1 at Bus 1",
+      "bus": 0,
+      "p_mw": -9.401716138358474,
+      "q_mvar": -63.53310724873289,
+      "vm_pu": 1.0,
+      "p_min_mw": -1000000000.0,
+      "p_max_mw": 1000000000.0,
+      "q_min_mvar": 0.0,
+      "q_max_mvar": 0.0,
+      "status": true
+    },
+    "1": {
+      "id": 1,
+      "name": "Gen 2 at Bus 3",
+      "bus": 2,
+      "p_mw": 50.0,
+      "q_mvar": 85.3279588336581,
+      "vm_pu": 1.02,
+      "p_min_mw": -1000000000.0,
+      "p_max_mw": 1000000000.0,
+      "q_min_mvar": -100.0,
+      "q_max_mvar": 100.0,
+      "status": true
+    }
+  },
+  "loads": {
+    "0": {
+      "id": 0,
+      "name": "Load 2",
+      "bus": 1,
+      "p_mw": 40.0,
+      "q_mvar": 20.0,
+      "status": true
+    }
+  },
+  "shunts": {}
+}

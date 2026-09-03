@@ -7,6 +7,8 @@ oracle reference solutions for regression testing.
 
 import json
 import os
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 import pandapower as pp
 import pandapower.networks as pn
 
@@ -268,6 +270,25 @@ def solve_and_extract_oracle(net, case_name):
 
 def main():
     os.makedirs("data/cases", exist_ok=True)
+
+    # 0. Case 3 (Canonical reference network)
+    from oracle_check import build_three_bus_case
+    net3 = build_three_bus_case()
+    pp.runpp(net3, numba=False)
+    ppc3 = net3._ppc
+
+    with open("data/cases/case3.m", "w") as f:
+        f.write(ppc_to_matpower_m(ppc3, "case3"))
+
+    arc_json3 = ppc_to_arc_json(ppc3)
+    with open("data/cases/case3.json", "w") as f:
+        json.dump(arc_json3, f, indent=2)
+
+    oracle3 = solve_and_extract_oracle(build_three_bus_case(), "case3")
+    with open("data/cases/case3_oracle.json", "w") as f:
+        json.dump(oracle3, f, indent=2)
+
+    print("Exported case3.m, case3.json, case3_oracle.json")
 
     # 1. Case 9
     net9 = pn.case9()
