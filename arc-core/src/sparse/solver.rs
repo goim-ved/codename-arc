@@ -81,20 +81,27 @@ impl SparseLuSolver {
 
         let mut rhs = b.to_vec();
 
-        // Permutation arrays
+        // Permutation arrays and inverse column mapping for O(1) position lookup
         let mut row_perm: Vec<usize> = (0..n).collect();
         let mut col_perm: Vec<usize> = (0..n).collect();
+        let mut col_inv_perm: Vec<usize> = (0..n).collect();
 
         // Elimination stage: for step k = 0 .. n-1
         for k in 0..n {
             // Find best pivot in the active submatrix (rows k..n, cols k..n)
             // using Markowitz threshold pivoting
-            let (best_i, best_j) = self.select_pivot(&rows, &row_perm, &col_perm, k, n)?;
+            let (best_i, best_j) =
+                self.select_pivot(&rows, &row_perm, &col_perm, &col_inv_perm, k, n)?;
 
             // Swap row k and best_i in row_perm
             row_perm.swap(k, best_i);
-            // Swap col k and best_j in col_perm
+
+            // Swap col k and best_j in col_perm and update col_inv_perm
+            let c_k = col_perm[k];
+            let c_best = col_perm[best_j];
             col_perm.swap(k, best_j);
+            col_inv_perm[c_k] = best_j;
+            col_inv_perm[c_best] = k;
 
             let pivot_row_idx = row_perm[k];
             let pivot_col = col_perm[k];
@@ -176,26 +183,22 @@ impl SparseLuSolver {
         &self,
         rows: &[BTreeMap<usize, f64>],
         row_perm: &[usize],
-        col_perm: &[usize],
+        _col_perm: &[usize],
+        col_inv_perm: &[usize],
         k: usize,
         n: usize,
     ) -> Result<(usize, usize), SparseError> {
-        let active_cols: std::collections::BTreeSet<usize> =
-            col_perm[k..n].iter().copied().collect();
-
-        // 1. Compute column max absolute values in active submatrix for threshold check
-        let mut col_max: BTreeMap<usize, f64> = BTreeMap::new();
-        let mut col_counts: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut col_max = vec![0.0; n];
+        let mut col_counts = vec![0usize; n];
 
         for &r_idx in row_perm.iter().take(n).skip(k) {
             for (&c, &val) in &rows[r_idx] {
-                if active_cols.contains(&c) {
+                if col_inv_perm[c] >= k {
                     let abs_val = val.abs();
-                    let max_entry = col_max.entry(c).or_insert(0.0);
-                    if abs_val > *max_entry {
-                        *max_entry = abs_val;
+                    if abs_val > col_max[c] {
+                        col_max[c] = abs_val;
                     }
-                    *col_counts.entry(c).or_insert(0) += 1;
+                    col_counts[c] += 1;
                 }
             }
         }
@@ -210,7 +213,7 @@ impl SparseLuSolver {
         for (i, &r_idx) in row_perm.iter().enumerate().take(n).skip(k) {
             let active_row_count = rows[r_idx]
                 .keys()
-                .filter(|c| active_cols.contains(c))
+                .filter(|&&c| col_inv_perm[c] >= k)
                 .count();
 
             if active_row_count == 0 {
@@ -218,16 +221,16 @@ impl SparseLuSolver {
             }
 
             for (&c, &val) in &rows[r_idx] {
-                if !active_cols.contains(&c) {
+                if col_inv_perm[c] < k {
                     continue;
                 }
 
                 let abs_val = val.abs();
-                let max_in_col = *col_max.get(&c).unwrap_or(&0.0);
+                let max_in_col = col_max[c];
 
                 // Threshold criterion: |a_ij| >= u * max_k |a_kj|
                 if abs_val >= self.threshold * max_in_col && abs_val > self.zero_tolerance {
-                    let col_count = *col_counts.get(&c).unwrap_or(&1);
+                    let col_count = col_counts[c];
                     let markowitz = (active_row_count - 1) * (col_count - 1);
 
                     if markowitz < best_markowitz
@@ -236,12 +239,7 @@ impl SparseLuSolver {
                         best_markowitz = markowitz;
                         best_val_abs = abs_val;
                         best_i = i;
-                        // Find position of col c in col_perm[k..n]
-                        best_j = col_perm[k..n]
-                            .iter()
-                            .position(|&col_idx| col_idx == c)
-                            .map(|p| k + p)
-                            .unwrap();
+                        best_j = col_inv_perm[c];
                         found = true;
 
                         // Zero fill-in shortcut: if markowitz == 0, this pivot produces 0 fill-in!

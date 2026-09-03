@@ -11,8 +11,8 @@ fn test_automated_numerical_regression_harness() {
 
     assert_eq!(
         report.results.len(),
-        6,
-        "Expected 6 benchmark evaluations (3 cases * 2 modes)"
+        12,
+        "Expected 12 benchmark evaluations (6 cases * 2 modes)"
     );
     assert!(
         report.all_passed(),

@@ -39,7 +39,7 @@ def ppc_to_matpower_m(ppc, case_name):
                 if int(g_row[0]) == int(row[0]):
                     vm = float(g_row[5])
                     break
-        va = 0.0
+        va = float(row[8]) if b_type == 3 else 0.0
         base_kv = row[9] if len(row) > 9 else 138.0
         zone = int(row[10]) if len(row) > 10 else 1
         vmax = row[11] if len(row) > 11 else 1.1
@@ -121,7 +121,8 @@ def ppc_to_arc_json(ppc):
             vm_pu = 1.0
 
         base_kv = float(row[9]) if float(row[9]) > 0 else 138.0
-        va_rad = 0.0
+        import math
+        va_rad = math.radians(float(row[8])) if btype == "Slack" else 0.0
         v_max = float(row[11]) if len(row) > 11 else 1.1
         v_min = float(row[12]) if len(row) > 12 else 0.9
 
@@ -325,6 +326,60 @@ def main():
         json.dump(oracle14, f, indent=2)
 
     print("Exported case14.m, case14.json, case14_oracle.json")
+
+    # 3. Case 30
+    net30 = pn.case30()
+    pp.runpp(net30, numba=False)
+    ppc30 = net30._ppc
+
+    with open("data/cases/case30.m", "w") as f:
+        f.write(ppc_to_matpower_m(ppc30, "case30"))
+
+    arc_json30 = ppc_to_arc_json(ppc30)
+    with open("data/cases/case30.json", "w") as f:
+        json.dump(arc_json30, f, indent=2)
+
+    oracle30 = solve_and_extract_oracle(pn.case30(), "case30")
+    with open("data/cases/case30_oracle.json", "w") as f:
+        json.dump(oracle30, f, indent=2)
+
+    print("Exported case30.m, case30.json, case30_oracle.json")
+
+    # 4. Case 57
+    net57 = pn.case57()
+    pp.runpp(net57, numba=False)
+    ppc57 = net57._ppc
+
+    with open("data/cases/case57.m", "w") as f:
+        f.write(ppc_to_matpower_m(ppc57, "case57"))
+
+    arc_json57 = ppc_to_arc_json(ppc57)
+    with open("data/cases/case57.json", "w") as f:
+        json.dump(arc_json57, f, indent=2)
+
+    oracle57 = solve_and_extract_oracle(pn.case57(), "case57")
+    with open("data/cases/case57_oracle.json", "w") as f:
+        json.dump(oracle57, f, indent=2)
+
+    print("Exported case57.m, case57.json, case57_oracle.json")
+
+    # 5. Case 118
+    net118 = pn.case118()
+    pp.runpp(net118, numba=False)
+    ppc118 = net118._ppc
+
+    with open("data/cases/case118.m", "w") as f:
+        f.write(ppc_to_matpower_m(ppc118, "case118"))
+
+    arc_json118 = ppc_to_arc_json(ppc118)
+    with open("data/cases/case118.json", "w") as f:
+        json.dump(arc_json118, f, indent=2)
+
+    oracle118 = solve_and_extract_oracle(pn.case118(), "case118")
+    with open("data/cases/case118_oracle.json", "w") as f:
+        json.dump(oracle118, f, indent=2)
+
+    print("Exported case118.m, case118.json, case118_oracle.json")
 
 
 if __name__ == "__main__":

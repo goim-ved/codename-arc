@@ -42,6 +42,8 @@ pub struct CaseRegressionResult {
     pub buses: usize,
     /// Number of transmission branches in network.
     pub branches: usize,
+    /// Matrix sparsity percentage ($1 - \text{nnz}/N^2$).
+    pub sparsity_pct: f64,
     /// Number of iterations taken to solve (1 for DC).
     pub iterations: usize,
     /// Maximum voltage magnitude error in per-unit (None for DC).
@@ -97,13 +99,14 @@ impl RegressionReport {
     }
 
     /// Formats the regression results as a clean ASCII table string.
+    /// Formats the regression results as a clean ASCII table string.
     pub fn format_table(&self) -> String {
         let mut out = String::new();
-        out.push_str("========================================================================================================================\n");
+        out.push_str("===================================================================================================================================\n");
         out.push_str(
-            "Case       Mode   Buses  Branches  Iter  Max |Vm| Err (pu)  MAE |Vm| (pu)  Max |Va| Err (rad)  MAE |Va| (rad)  Status\n",
+            "Case       Mode   Buses  Branches  Sparsity   Iter  Max |Vm| Err (pu)  MAE |Vm| (pu)  Max |Va| Err (rad)  MAE |Va| (rad)  Status\n",
         );
-        out.push_str("------------------------------------------------------------------------------------------------------------------------\n");
+        out.push_str("-----------------------------------------------------------------------------------------------------------------------------------\n");
 
         for r in &self.results {
             let vm_max_str = match r.max_vm_err {
@@ -117,13 +120,15 @@ impl RegressionReport {
             let va_max_str = format!("{:.2e}", r.max_va_err);
             let va_mae_str = format!("{:.2e}", r.mae_va_err);
             let status_str = if r.passed { "PASS" } else { "FAIL" };
+            let sparsity_str = format!("{:>6.1}%", r.sparsity_pct);
 
             out.push_str(&format!(
-                "{:<10} {:<6} {:>5} {:>9} {:>5}  {:>17}  {:>13}  {:>18}  {:>14}  {:<6}\n",
+                "{:<10} {:<6} {:>5} {:>9} {:>9} {:>6}  {:>17}  {:>13}  {:>18}  {:>14}  {:<6}\n",
                 r.case_name,
                 r.mode,
                 r.buses,
                 r.branches,
+                sparsity_str,
                 r.iterations,
                 vm_max_str,
                 vm_mae_str,
@@ -133,7 +138,7 @@ impl RegressionReport {
             ));
         }
 
-        out.push_str("========================================================================================================================\n");
+        out.push_str("===================================================================================================================================\n");
         let total = self.results.len();
         let passed_count = self.results.iter().filter(|r| r.passed).count();
         let failed_count = total - passed_count;
@@ -156,7 +161,7 @@ impl RegressionReport {
 pub struct RegressionHarness;
 
 impl RegressionHarness {
-    /// Runs regression testing across all bundled benchmark cases (`case3`, `case9`, `case14`).
+    /// Runs regression testing across all bundled benchmark cases (`case3`, `case9`, `case14`, `case30`, `case57`, `case118`).
     pub fn run_all() -> Result<RegressionReport, String> {
         let cases = [
             (
@@ -173,6 +178,21 @@ impl RegressionHarness {
                 "case14",
                 include_str!("../../data/cases/case14.m"),
                 include_str!("../../data/cases/case14_oracle.json"),
+            ),
+            (
+                "case30",
+                include_str!("../../data/cases/case30.m"),
+                include_str!("../../data/cases/case30_oracle.json"),
+            ),
+            (
+                "case57",
+                include_str!("../../data/cases/case57.m"),
+                include_str!("../../data/cases/case57_oracle.json"),
+            ),
+            (
+                "case118",
+                include_str!("../../data/cases/case118.m"),
+                include_str!("../../data/cases/case118_oracle.json"),
             ),
         ];
 
@@ -199,6 +219,8 @@ impl RegressionHarness {
 
         let n = network.bus_count();
         let m = network.branch_count();
+        let nnz = n + 2 * m;
+        let sparsity_pct = (1.0 - (nnz as f64 / (n * n) as f64)) * 100.0;
 
         let mut out = Vec::new();
 
@@ -248,6 +270,7 @@ impl RegressionHarness {
             mode: "AC".to_string(),
             buses: n,
             branches: m,
+            sparsity_pct,
             iterations: ac_res.iterations,
             max_vm_err: Some(max_ac_vm_err),
             mae_vm_err: Some(mae_ac_vm),
@@ -287,6 +310,7 @@ impl RegressionHarness {
             mode: "DC".to_string(),
             buses: n,
             branches: m,
+            sparsity_pct,
             iterations: 1,
             max_vm_err: None,
             mae_vm_err: None,
@@ -307,7 +331,7 @@ mod tests {
     #[test]
     fn test_regression_harness_execution() {
         let report = RegressionHarness::run_all().expect("Regression harness must execute cleanly");
-        assert_eq!(report.results.len(), 6); // 3 cases * 2 modes
+        assert_eq!(report.results.len(), 12); // 6 cases * 2 modes
         assert!(
             report.all_passed(),
             "All cases must pass regression thresholds"

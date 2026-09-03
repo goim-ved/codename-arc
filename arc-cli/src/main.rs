@@ -35,6 +35,10 @@ enum Commands {
         /// Power flow formulation mode
         #[arg(short, long, value_enum, default_value_t = SolveMode::Ac)]
         mode: SolveMode,
+
+        /// Linear solver algorithm backend
+        #[arg(short, long, value_enum, default_value_t = CliSolverKind::Sparse)]
+        solver: CliSolverKind,
     },
     /// Displays build and environment metadata
     Info,
@@ -46,6 +50,14 @@ enum SolveMode {
     Ac,
     /// Linear DC power flow (B * theta = P)
     Dc,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+enum CliSolverKind {
+    /// Direct sparse LU with Markowitz threshold pivoting (O(N^1.2))
+    Sparse,
+    /// Dense Gaussian elimination with partial pivoting (O(N^3))
+    Dense,
 }
 
 fn main() {
@@ -71,8 +83,8 @@ fn main() {
                 }
             }
         }
-        Some(Commands::Run { file, mode }) => {
-            if let Err(e) = run_case(&file, mode) {
+        Some(Commands::Run { file, mode, solver }) => {
+            if let Err(e) = run_case(&file, mode, solver) {
                 eprintln!("Error: {e}");
                 process::exit(1);
             }
@@ -83,6 +95,9 @@ fn main() {
                 "Open-source, deterministic power flow kernel for grid interconnection studies"
             );
             println!("Supported solvers: Linear DC, Polar Newton-Raphson AC");
+            println!(
+                "Supported linear solvers: Sparse (Markowitz LU), Dense (Gaussian Elimination)"
+            );
             println!("Supported case formats: MATPOWER .m, arc Grid JSON");
             println!("\nRun 'arc test' to execute automated numerical regression harness.");
             println!("Run 'arc run <FILE>' to solve a case file.");
@@ -90,7 +105,7 @@ fn main() {
     }
 }
 
-fn run_case(path: &PathBuf, mode: SolveMode) -> Result<(), String> {
+fn run_case(path: &PathBuf, mode: SolveMode, solver: CliSolverKind) -> Result<(), String> {
     let content = fs::read_to_string(path)
         .map_err(|e| format!("Could not read file {}: {e}", path.display()))?;
 
@@ -104,13 +119,32 @@ fn run_case(path: &PathBuf, mode: SolveMode) -> Result<(), String> {
             .map_err(|e| format!("Failed to parse MATPOWER file {}: {e}", path.display()))?
     };
 
+    let n = network.bus_count();
+    let m = network.branch_count();
+    let nnz = n + 2 * m;
+    let sparsity_pct = if n > 0 {
+        (1.0 - (nnz as f64 / (n * n) as f64)) * 100.0
+    } else {
+        0.0
+    };
+
+    let solver_kind = match solver {
+        CliSolverKind::Sparse => arc_core::linear::LinearSolverKind::Sparse,
+        CliSolverKind::Dense => arc_core::linear::LinearSolverKind::Dense,
+    };
+
     println!(
         "Loaded network '{}' from {}",
         path.file_name().unwrap_or_default().to_string_lossy(),
         path.display()
     );
-    println!("  Buses:      {}", network.bus_count());
-    println!("  Branches:   {}", network.branch_count());
+    println!("  Buses:      {n}");
+    println!("  Branches:   {m}");
+    println!(
+        "  Sparsity:   {sparsity_pct:.1}% ({nnz} non-zeros out of {})",
+        n * n
+    );
+    println!("  Linear:     {solver_kind}");
     println!("  Generators: {}", network.generators.len());
     println!("  Loads:      {}", network.loads.len());
     println!("  Shunts:     {}", network.shunts.len());
@@ -119,9 +153,13 @@ fn run_case(path: &PathBuf, mode: SolveMode) -> Result<(), String> {
 
     match mode {
         SolveMode::Ac => {
-            println!("Solving non-linear AC power flow (polar Newton-Raphson)...");
-            let result =
-                ACPowerFlow::solve(&network).map_err(|e| format!("AC solve failed: {e}"))?;
+            println!("Solving non-linear AC power flow (polar Newton-Raphson, {solver_kind})...");
+            let options = arc_core::solver::ACPowerFlowOptions {
+                solver_kind,
+                ..Default::default()
+            };
+            let result = ACPowerFlow::solve_with_options(&network, &options)
+                .map_err(|e| format!("AC solve failed: {e}"))?;
 
             println!(
                 "Converged:   {} in {} iterations (max mismatch: {:.2e} pu)",
@@ -161,9 +199,9 @@ fn run_case(path: &PathBuf, mode: SolveMode) -> Result<(), String> {
             }
         }
         SolveMode::Dc => {
-            println!("Solving linear DC power flow (B * theta = P)...");
-            let result =
-                DCPowerFlow::solve(&network).map_err(|e| format!("DC solve failed: {e}"))?;
+            println!("Solving linear DC power flow (B * theta = P, {solver_kind})...");
+            let result = DCPowerFlow::solve_with_solver(&network, solver_kind)
+                .map_err(|e| format!("DC solve failed: {e}"))?;
 
             println!("Solved in 1 iteration (lossless formulation)\n");
 
