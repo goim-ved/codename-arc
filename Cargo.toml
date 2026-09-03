@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "arc-core",
+    "arc-cli",
+]
+resolver = "2"
