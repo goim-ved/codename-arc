@@ -9,33 +9,36 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 5
+- Last updated: 2026-09-03, session 6
 
 ## Current State
-- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
+- What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) with `model`, `admittance`, `linear`, `parser`, `solver::dc`, and `solver::ac` modules compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 24 passed (20 unit tests in `arc-core`, 1 in `arc-cli`, 3 integration tests `ybus_oracle_validation`, `dc_oracle_validation`, and `ac_oracle_validation`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 28 passed (22 unit tests in `arc-core`, 1 in `arc-cli`, 4 integration tests `ybus_oracle_validation`, `dc_oracle_validation`, `ac_oracle_validation`, and `benchmark_oracle_validation`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
-  - Python oracle runner `scripts/oracle_check.py --case case3 --mode ac` matches Rust `ACPowerFlow` voltages, angles, and branch flows to $< 10^{-6}$ tolerance (verified 2026-09-03).
-  - DC vs AC ballpark comparison test passes, confirming DC is a consistent approximation of AC on the 3-bus network.
+  - IEEE 9-bus (`case9`) and IEEE 14-bus (`case14`) match pandapower 3.5.4 oracle to machine precision:
+    - `case9`: AC Vm MAE $3.58 \times 10^{-16}$ p.u., Va MAE $3.12 \times 10^{-16}$ rad; DC Va MAE $1.06 \times 10^{-17}$ rad.
+    - `case14`: AC Vm MAE $3.65 \times 10^{-16}$ p.u., Va MAE $4.71 \times 10^{-16}$ rad; DC Va MAE $2.49 \times 10^{-16}$ rad.
 - What is stubbed, fake, or not implemented:
-  - Standard MATPOWER / IEEE case parser not yet created (M5).
-  - Formal oracle test harness regression suite not yet created (M6).
-- Current milestone: M4 — AC power flow (Newton-Raphson, dense Jacobian, polar coordinates)
-- Milestone status: done (verified via quadratic convergence, pandapower AC oracle validation, and DC vs AC comparison). M5 ready to begin.
+  - Automated numerical regression harness CLI runner (M6).
+  - Sparse matrix LU / KLU solver for scaling beyond dense limits (M7).
+- Current milestone: M5 — Standard test case support (MATPOWER case9, case14)
+- Milestone status: done (verified via ADR-0002, tabular MATPOWER parser, and IEEE case9 / case14 cross-validation). M6 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
 - `cargo test --workspace`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo fmt --all -- --check`
-- Oracle cross-check AC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case3 --mode ac`
-- Oracle cross-check DC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case3 --mode dc`
-- Oracle dump Y-bus: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case3 --dump-ybus`
+- Benchmark oracle test: `cargo test --test benchmark_oracle_validation -- --nocapture`
+- Oracle cross-check AC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case9 --mode ac`
+- Oracle cross-check DC: `.\.oracle-venv\Scripts\python scripts/oracle_check.py --case case9 --mode dc`
+- Export cases: `.\.oracle-venv\Scripts\python scripts/export_cases.py`
 
 ## Architecture Decisions
 - ADR-0001: Minimal from-scratch Newton-Raphson solver core selected over wrapping RustPower or external C/KLU crates to guarantee strict determinism and compatibility with future GridIR — docs/adr/0001-prior-art-survey.md
+- ADR-0002: Two-tier case representation adopting native `arc` Grid JSON (serde) alongside a lightweight tabular MATPOWER `.m` parser with bundled IEEE benchmark cases — docs/adr/0002-case-format.md
 
 ## File Manifest
 - `Cargo.toml` — Workspace root configuration for `arc-core` and `arc-cli`
@@ -45,31 +48,56 @@
 - `README.md` — Project overview and human-facing status
 - `CLAUDE.md` — Agent working memory across sessions
 - `docs/adr/0001-prior-art-survey.md` — ADR evaluating existing power flow tools and justifying from-scratch core
+- `docs/adr/0002-case-format.md` — ADR on test case format selection (JSON + MATPOWER .m)
 - `arc-core/Cargo.toml` — Crate definition for core power flow library
 - `arc-core/src/lib.rs` — Root module for arc-core with re-exports
-- `arc-core/src/model.rs` — Bus, Branch, Generator, Load, and Network types with per-unit conversions
-- `arc-core/src/admittance.rs` — Bus admittance matrix ($Y_{\text{bus}}$) builder and tests
+- `arc-core/src/model.rs` — Bus, Branch, Generator, Load, Shunt, and Network types with per-unit conversions
+- `arc-core/src/admittance.rs` — Bus admittance matrix ($Y_{\text{bus}}$) builder with branch and shunt support
 - `arc-core/src/linear.rs` — Deterministic dense linear system solver ($A x = b$) with partial pivoting
+- `arc-core/src/parser/mod.rs` — Parser module definitions and re-exports
+- `arc-core/src/parser/matpower.rs` — Tabular MATPOWER `.m` case parser
 - `arc-core/src/solver/mod.rs` — Solver module definitions and re-exports
 - `arc-core/src/solver/dc.rs` — Linear DC power flow solver ($B\theta = P$) and tests
 - `arc-core/src/solver/ac.rs` — Non-linear AC Newton-Raphson polar power flow solver and tests
 - `arc-core/tests/ybus_oracle_validation.rs` — Integration test cross-validating Y-bus against pandapower oracle
 - `arc-core/tests/dc_oracle_validation.rs` — Integration test cross-validating DC power flow against pandapower oracle
 - `arc-core/tests/ac_oracle_validation.rs` — Integration test cross-validating AC power flow against pandapower oracle and DC sanity checks
+- `arc-core/tests/benchmark_oracle_validation.rs` — Integration test cross-validating IEEE case9 and case14 across AC/DC solvers
 - `arc-cli/Cargo.toml` — Crate definition for command line interface
 - `arc-cli/src/main.rs` — Entry point for CLI binary
+- `data/cases/` — Bundled IEEE benchmark cases (`case9.m`, `case9.json`, `case14.m`, `case14.json`, oracle results)
 - `scripts/oracle_check.py` — Pandapower numerical oracle runner for case cross-validation and Y-bus dumping
+- `scripts/export_cases.py` — Script exporting canonical pandapower networks to MATPOWER and arc Grid JSON
 
 ## Known Issues / Gaps
-- None for M4. Full non-linear AC Newton-Raphson solver converges quadratically to machine precision and matches external oracle.
+- None for M5. Both IEEE 9-bus and 14-bus test cases converge in 4 iterations and match external oracle to machine precision.
 
 ## Next Steps
-1. Begin Milestone 5 (M5): Standard test case support (MATPOWER case9 and case14).
-2. Record format choice in `docs/adr/0002-case-format.md`.
-3. Implement parser and solve both IEEE 9-bus and 14-bus cases with DC and AC solvers.
-4. Cross-validate case9 and case14 solutions against pandapower oracle.
+1. Begin Milestone 6 (M6): Automated numerical regression test harness.
+2. Build regression harness verifying all cases (3-bus, 9-bus, 14-bus) against oracle benchmarks with structured error reporting.
+3. Expose regression verification command in `arc-cli`.
 
 ## Session Log (append-only, newest entry at top — never delete history)
+### Session 6 — 2026-09-03
+- Did:
+  - Wrote and committed ADR-0002 on test case format selection (`docs/adr/0002-case-format.md`).
+  - Added `Shunt` struct and `shunts` map to `Network` in `arc-core/src/model.rs`.
+  - Updated `YBus::build` in `arc-core/src/admittance.rs` to incorporate bus shunt conductances and susceptances into diagonal elements.
+  - Implemented tabular MATPOWER `.m` case parser in `arc-core/src/parser/matpower.rs`.
+  - Created `scripts/export_cases.py` and exported canonical `case9.m`, `case9.json`, `case14.m`, `case14.json`, and oracle reference solutions to `data/cases/`.
+  - Implemented integration test `arc-core/tests/benchmark_oracle_validation.rs`:
+    - Verified equivalence of `.m` parser and `.json` deserialization.
+    - Solved AC and DC power flow on both IEEE 9-bus and IEEE 14-bus networks.
+    - Recorded MAE: Case 9 AC Vm MAE $3.58 \times 10^{-16}$, Va MAE $3.12 \times 10^{-16}$; Case 14 AC Vm MAE $3.65 \times 10^{-16}$, Va MAE $4.71 \times 10^{-16}$ (both well within targets $< 10^{-6}$ and $< 10^{-4}$).
+- Verified via:
+  - `cargo test --workspace` → 28 passed (22 in `arc-core`, 1 in `arc-cli`, 5 integration test suites), 0 failed.
+  - `cargo clippy --workspace --all-targets -- -D warnings` → Clean (0 warnings).
+  - `cargo fmt --all -- --check` → Clean (formatting confirmed).
+- Did not do / deliberately deferred:
+  - Milestone 6 (Automated regression test harness) deferred to next milestone.
+- Next session should start with:
+  - Start Milestone 6 (M6): Numerical regression test harness.
+
 ### Session 5 — 2026-09-03
 - Did:
   - Implemented Milestone 4: Non-linear AC Newton-Raphson solver in polar coordinates with dense analytical Jacobian in `arc-core/src/solver/ac.rs`.
