@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 6 complete (automated numerical regression test harness across all benchmark networks integrated into CI and arc CLI; 29 passing tests); Milestone 7 (sparse matrix & linear solver upgrade) ready to start.
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 7 complete (pure-Rust sparse matrix & linear solver upgrade with Markowitz threshold pivoting, validated across IEEE 14, 30, 57, 118 cases; 44 passing tests); Milestone 8 (CLI ergonomics & parameter overrides) ready to start.
 
 ## Try it
 
@@ -21,14 +21,17 @@ Once the Rust toolchain is installed:
 # Build the workspace
 cargo build --workspace
 
-# Run full test suite across workspace (29 passing tests)
+# Run full test suite across workspace (44 passing tests)
 cargo test --workspace
 
-# Run automated numerical regression harness
+# Run automated numerical regression harness across all 6 IEEE benchmark cases (12 evaluations)
 cargo run --bin arc -- test
 
-# Solve power flow on an IEEE benchmark case
-cargo run --bin arc -- run data/cases/case14.m
+# Solve power flow on an IEEE benchmark case using the sparse solver
+cargo run --bin arc -- run data/cases/case118.m --mode ac --solver sparse
+
+# Run sparse vs dense scaling benchmarks
+cargo test --test sparse_scaling_benchmarks --release -- --nocapture
 
 # Run the pandapower numerical oracle
 python scripts/oracle_check.py --case case14 --mode ac
@@ -45,8 +48,8 @@ Development proceeds strictly milestone-by-milestone, with each milestone verifi
 - **M4 — AC Power Flow (Newton-Raphson, Dense)**: Polar Newton-Raphson solver cross-validated against oracle at $10^{-6}$ p.u. tolerance. *(Done)*
 - **M5 — Standard Test Case Support**: IEEE 9-bus and 14-bus case loading and solving. *(Done)*
 - **M6 — Automated Numerical Regression Test Harness**: Automated suite running in CI and CLI across all cases. *(Done)*
-- **M7 — Sparse Matrix & Linear Solver Upgrade**: Sparse LU factorization (KLU/Faer/Sprs) for scaling. *(Next)*
-- **M8 — CLI & Ergonomics**: Full `arc solve <case-file>` interface and parameter overrides.
+- **M7 — Sparse Matrix & Linear Solver Upgrade**: Pure-Rust sparse LU with Markowitz threshold pivoting, tested on IEEE 14, 30, 57, 118 networks. *(Done)*
+- **M8 — CLI & Ergonomics**: Full `arc solve <case-file>` interface and parameter overrides. *(Next)*
 - **M9 — Determinism & Benchmark Baseline**: Bit-diff testing in CI and Criterion performance baseline.
 - **M10 — v0.1 Garage Release**: Tagged v0.1.0 release note and frozen benchmark.
 
