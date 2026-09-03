@@ -6,6 +6,10 @@
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 
+pub mod model;
+
+pub use model::{Branch, Bus, BusType, Generator, Load, ModelError, Network, DEFAULT_BASE_MVA};
+
 #[cfg(test)]
 mod tests {
     #[test]

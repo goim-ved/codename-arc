@@ -9,20 +9,21 @@
 - Stage: Garage / v0.1 (pre-alpha)
 - License: Apache-2.0
 - Language: Rust (edition 2021)
-- Last updated: 2026-09-03, session 1
+- Last updated: 2026-09-03, session 2
 
 ## Current State
 - What compiles right now: Complete workspace (`arc-core` library and `arc-cli` binary) compiles cleanly with Rust 1.98.0 (MSVC).
 - What has passing tests right now:
-  - `cargo test --workspace`: 2 passed (1 in `arc-core`, 1 in `arc-cli`), 0 failed (verified 2026-09-03).
+  - `cargo test --workspace`: 10 passed (9 in `arc-core`, 1 in `arc-cli`), 0 failed (verified 2026-09-03).
   - `cargo clippy --workspace --all-targets -- -D warnings`: clean, 0 warnings (verified 2026-09-03).
   - `cargo fmt --all -- --check`: clean (verified 2026-09-03).
   - Python oracle runner `scripts/oracle_check.py` AC & DC solves on `case3` match pandapower 3.5.4 in `.oracle-venv` (verified 2026-09-03).
 - What is stubbed, fake, or not implemented:
-  - Grid data models (`Bus`, `Branch`, `Generator`, `Load` in `arc-core/src/model.rs`) not yet created (M1).
-  - Admittance builder (`Ybus`), DC solver, and Newton-Raphson AC solver not yet created (M2-M4).
-- Current milestone: M0 — Repo scaffold and prior art survey
-- Milestone status: done (verified via `cargo test --workspace`, `cargo clippy`, `cargo fmt`, and oracle execution). M1 ready to begin upon user confirmation.
+  - Y-bus admittance matrix builder not yet created (M2).
+  - DC linear power flow solver not yet created (M3).
+  - AC Newton-Raphson polar power flow solver not yet created (M4).
+- Current milestone: M1 — Core data model
+- Milestone status: done (verified via `cargo test --workspace` with 10 passing tests). M2 ready to begin.
 
 ## Build & Test Commands
 - `cargo build --workspace`
@@ -44,20 +45,56 @@
 - `CLAUDE.md` — Agent working memory across sessions
 - `docs/adr/0001-prior-art-survey.md` — ADR evaluating existing power flow tools and justifying from-scratch core
 - `arc-core/Cargo.toml` — Crate definition for core power flow library
-- `arc-core/src/lib.rs` — Root module for arc-core with base test
+- `arc-core/src/lib.rs` — Root module for arc-core with re-exports
+- `arc-core/src/model.rs` — Bus, Branch, Generator, Load, and Network types with per-unit conversions
 - `arc-cli/Cargo.toml` — Crate definition for command line interface
 - `arc-cli/src/main.rs` — Entry point for CLI binary
 - `scripts/oracle_check.py` — Pandapower numerical oracle runner for case cross-validation
 
 ## Known Issues / Gaps
-- None for M0. Environment is fully configured with Rust 1.98.0 and Python 3.12 (.oracle-venv).
+- None. Core data model is fully implemented, verified, and tested.
 
 ## Next Steps
-1. User confirms starting Milestone 1 (M1).
-2. Implement `Bus`, `Branch`, `Generator`, `Load` in `arc-core/src/model.rs` with explicit per-unit conventions.
-3. Add unit tests for component construction and per-unit conversions; verify with `cargo test`.
+1. Begin Milestone 2 (M2): Implement Y-bus admittance matrix builder (`arc-core/src/admittance.rs`).
+2. Unit-test Y-bus builder against hand-calculated 3-bus admittance matrix values.
+3. Validate admittance symmetry and sparsity characteristics before proceeding to M3.
 
 ## Session Log (append-only, newest entry at top — never delete history)
+### Session 2 — 2026-09-03
+- Did:
+  - Pushed initial repository commit `32b6b68` to GitHub remote `https://github.com/goim-ved/codename-arc.git`.
+  - Implemented Milestone 1: `Bus`, `Branch`, `Generator`, `Load`, `Network`, and `ModelError` types in `arc-core/src/model.rs`.
+  - Documented explicit per-unit conventions inline (default $S_{\text{base}} = 100.0\text{ MVA}$, $Z_{\text{base}} = V^2 / S$, $I_{\text{base}} = S / (\sqrt{3} V)$).
+  - Implemented complex series admittance calculation $Y = 1/(R+jX) = G + jB$ on `Branch`.
+  - Implemented net active and reactive power injection calculation ($P_{\text{inj}}, Q_{\text{inj}}$) accounting for online/offline generator and load statuses.
+  - Implemented `Network::validate()` verifying topological consistency, single slack bus requirement, and valid bus IDs.
+  - Added comprehensive unit tests for per-unit conversions, angle conversions, series admittance, net injections, offline element handling, and canonical 3-bus network construction.
+- Verified via:
+  - `cargo test --workspace` →
+    ```text
+    running 1 test
+    test tests::cli_scaffold_verification ... ok
+    test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+    running 9 tests
+    test model::tests::test_branch_series_admittance ... ok
+    test model::tests::test_bus_angle_conversions ... ok
+    test model::tests::test_canonical_3bus_network_construction ... ok
+    test model::tests::test_generator_and_load_per_unit_power ... ok
+    test model::tests::test_net_power_injection ... ok
+    test model::tests::test_network_validation_errors ... ok
+    test model::tests::test_per_unit_base_conversions ... ok
+    test tests::scaffold_verification ... ok
+    test model::tests::test_offline_generator_and_load_ignored_in_injections ... ok
+    test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+    ```
+  - `cargo clippy --workspace --all-targets -- -D warnings` → Clean (0 warnings).
+  - `cargo fmt --all -- --check` → Clean (formatting confirmed).
+- Did not do / deliberately deferred:
+  - Milestone 2 (Y-bus admittance matrix builder) deferred until M1 is committed and reviewed.
+- Next session should start with:
+  - Start Milestone 2 (M2): `arc-core/src/admittance.rs` for Y-bus matrix construction and verification.
+
 ### Session 1 — 2026-09-03
 - Did:
   - Confirmed working directory `e:\products\arc` is clean and appropriate.

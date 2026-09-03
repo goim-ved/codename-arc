@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 0 complete (Cargo workspace compiles cleanly, tests green, clippy clean, pandapower oracle verified, ADR-0001 accepted); Milestone 1 (core data model) ready to start.
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 1 complete (core data model Bus/Branch/Generator/Load with explicit per-unit conventions implemented and verified with 10 passing tests); Milestone 2 (Y-bus admittance matrix builder) ready to start.
 
 ## Try it
 
