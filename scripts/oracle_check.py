@@ -120,14 +120,37 @@ def run_oracle(case_name: str, mode: str = "ac"):
     return output
 
 
+def get_ybus(case_name: str):
+    net = get_network(case_name)
+    pp.runpp(net, numba=False)
+    ybus_sparse = net._ppc["internal"]["Ybus"].tocoo()
+    elements = []
+    for r, c, val in zip(ybus_sparse.row, ybus_sparse.col, ybus_sparse.data):
+        elements.append({
+            "row": int(r),
+            "col": int(c),
+            "g": round(float(val.real), 10),
+            "b": round(float(val.imag), 10)
+        })
+    return {
+        "case": case_name,
+        "n": int(net._ppc["internal"]["Ybus"].shape[0]),
+        "elements": elements
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="pandapower numerical oracle for arc")
     parser.add_argument("--case", default="case3", help="Case to solve (case3, case9, case14, or JSON path)")
     parser.add_argument("--mode", default="ac", choices=["ac", "dc"], help="Power flow mode (ac or dc)")
+    parser.add_argument("--dump-ybus", action="store_true", help="Dump Ybus admittance matrix elements as JSON")
     parser.add_argument("--output", default=None, help="Path to write JSON output")
     args = parser.parse_args()
 
-    result = run_oracle(args.case, args.mode)
+    if args.dump_ybus:
+        result = get_ybus(args.case)
+    else:
+        result = run_oracle(args.case, args.mode)
     json_data = json.dumps(result, indent=2)
 
     if args.output:

@@ -6,8 +6,10 @@
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
 
+pub mod admittance;
 pub mod model;
 
+pub use admittance::YBus;
 pub use model::{Branch, Bus, BusType, Generator, Load, ModelError, Network, DEFAULT_BASE_MVA};
 
 #[cfg(test)]

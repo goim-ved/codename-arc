@@ -11,7 +11,7 @@ When a new solar farm, wind plant, or battery facility wants to connect to the e
 
 ## Status
 
-🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 1 complete (core data model Bus/Branch/Generator/Load with explicit per-unit conventions implemented and verified with 10 passing tests); Milestone 2 (Y-bus admittance matrix builder) ready to start.
+🚧 Garage stage (v0.1-in-progress). Current one-line truth: Milestone 2 complete (Y-bus admittance matrix builder implemented with exact hand derivations and cross-validated against pandapower oracle; 16 passing tests); Milestone 3 (linear DC power flow) ready to start.
 
 ## Try it
 
