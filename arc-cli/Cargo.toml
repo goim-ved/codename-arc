@@ -5,5 +5,11 @@ edition = "2021"
 license = "Apache-2.0"
 description = "Command-line interface for arc"
 
+[[bin]]
+name = "arc"
+path = "src/main.rs"
+
 [dependencies]
 arc-core = { path = "../arc-core" }
+clap = { version = "4.5", features = ["derive"] }
+serde_json = "1.0"
