@@ -8,7 +8,27 @@
 //! - **Strict Loop Ordering**: Eliminates unordered iterations or non-deterministic reductions.
 //! - **Zero Third-Party Native Dependencies**: Ensures bit-for-bit identical results across OS and CPU targets.
 
+use serde::{Deserialize, Serialize};
 use std::fmt;
+
+/// Algorithm choice for solving linear equation systems $A x = b$.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum LinearSolverKind {
+    /// Sparse direct LU factorization with Markowitz threshold pivoting ($\mathcal{O}(N^{1.2} - N^{1.4})$).
+    #[default]
+    Sparse,
+    /// Dense Gaussian elimination with partial pivoting ($\mathcal{O}(N^3)$).
+    Dense,
+}
+
+impl fmt::Display for LinearSolverKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Sparse => write!(f, "Sparse (Markowitz LU)"),
+            Self::Dense => write!(f, "Dense (Gaussian Elimination)"),
+        }
+    }
+}
 
 /// Errors arising during linear system factorization and solution.
 #[derive(Debug, Clone, PartialEq, Eq)]

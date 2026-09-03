@@ -15,7 +15,7 @@ pub mod solver;
 pub mod sparse;
 
 pub use admittance::YBus;
-pub use linear::{solve_dense_system, LinearSolverError};
+pub use linear::{solve_dense_system, LinearSolverError, LinearSolverKind};
 pub use model::{
     Branch, Bus, BusType, Generator, Load, ModelError, Network, Shunt, DEFAULT_BASE_MVA,
 };

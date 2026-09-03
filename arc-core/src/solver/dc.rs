@@ -40,8 +40,9 @@
 //! The reduced matrix $B_{\mathcal{NS}, \mathcal{NS}}$ is symmetric positive-definite for connected
 //! grids and is solved directly in a single pass via Gaussian elimination with partial pivoting.
 
-use crate::linear::{solve_dense_system, LinearSolverError};
+use crate::linear::{solve_dense_system, LinearSolverError, LinearSolverKind};
 use crate::model::{BusType, ModelError, Network};
+use crate::sparse::{CsrMatrix, SparseError, TripletList};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -53,6 +54,8 @@ pub enum SolverError {
     Model(ModelError),
     /// Dense linear system solver encountered singularity or dimension mismatch.
     Linear(LinearSolverError),
+    /// Sparse matrix or linear solver encountered an error.
+    Sparse(SparseError),
 }
 
 impl fmt::Display for SolverError {
@@ -60,6 +63,7 @@ impl fmt::Display for SolverError {
         match self {
             Self::Model(err) => write!(f, "Model error: {err}"),
             Self::Linear(err) => write!(f, "Linear solve error: {err}"),
+            Self::Sparse(err) => write!(f, "Sparse solve error: {err}"),
         }
     }
 }
@@ -75,6 +79,12 @@ impl From<ModelError> for SolverError {
 impl From<LinearSolverError> for SolverError {
     fn from(err: LinearSolverError) -> Self {
         Self::Linear(err)
+    }
+}
+
+impl From<SparseError> for SolverError {
+    fn from(err: SparseError) -> Self {
+        Self::Sparse(err)
     }
 }
 
@@ -127,12 +137,20 @@ pub struct DCPowerFlowResult {
 pub struct DCPowerFlow;
 
 impl DCPowerFlow {
-    /// Solves linear DC power flow ($B\theta = P$) on the given network model.
+    /// Solves linear DC power flow ($B\theta = P$) on the given network model using the default sparse solver.
     ///
     /// # Returns
     /// * `Ok(DCPowerFlowResult)` on successful solve.
     /// * `Err(SolverError)` if validation fails or $B$ is singular (e.g. disconnected network).
     pub fn solve(network: &Network) -> Result<DCPowerFlowResult, SolverError> {
+        Self::solve_with_solver(network, LinearSolverKind::Sparse)
+    }
+
+    /// Solves linear DC power flow ($B\theta = P$) with an explicitly chosen linear solver algorithm (Sparse vs Dense).
+    pub fn solve_with_solver(
+        network: &Network,
+        solver_kind: LinearSolverKind,
+    ) -> Result<DCPowerFlowResult, SolverError> {
         network.validate()?;
 
         let n = network.buses.len();
@@ -212,21 +230,37 @@ impl DCPowerFlow {
         // Step 3: Form the reduced (N - 1) x (N - 1) system omitting the Slack bus
         let non_slack_indices: Vec<usize> = (0..n).filter(|&idx| idx != s_idx).collect();
         let red_dim = n - 1;
-
-        let mut b_red = vec![0.0; red_dim * red_dim];
         let mut p_red = vec![0.0; red_dim];
-
         for (r_idx, &r) in non_slack_indices.iter().enumerate() {
             // RHS: P_red[r] = P_inj[r] - B[r, slack] * theta_slack
             p_red[r_idx] = p_inj[r] - b_bus[r * n + s_idx] * theta_slack;
-
-            for (c_idx, &c) in non_slack_indices.iter().enumerate() {
-                b_red[r_idx * red_dim + c_idx] = b_bus[r * n + c];
-            }
         }
 
-        // Step 4: Solve B_red * theta_red = P_red via deterministic Gaussian elimination
-        let theta_red = solve_dense_system(&b_red, &p_red, red_dim)?;
+        // Step 4: Solve B_red * theta_red = P_red via chosen linear solver
+        let theta_red = match solver_kind {
+            LinearSolverKind::Dense => {
+                let mut b_red = vec![0.0; red_dim * red_dim];
+                for (r_idx, &r) in non_slack_indices.iter().enumerate() {
+                    for (c_idx, &c) in non_slack_indices.iter().enumerate() {
+                        b_red[r_idx * red_dim + c_idx] = b_bus[r * n + c];
+                    }
+                }
+                solve_dense_system(&b_red, &p_red, red_dim)?
+            }
+            LinearSolverKind::Sparse => {
+                let mut triplets = TripletList::with_capacity(red_dim * 4);
+                for (r_idx, &r) in non_slack_indices.iter().enumerate() {
+                    for (c_idx, &c) in non_slack_indices.iter().enumerate() {
+                        let val = b_bus[r * n + c];
+                        if val.abs() > 1e-15 {
+                            triplets.add(r_idx, c_idx, val);
+                        }
+                    }
+                }
+                let b_csr = CsrMatrix::from_triplets(red_dim, red_dim, triplets.as_slice())?;
+                b_csr.solve(&p_red)?
+            }
+        };
 
         // Step 5: Assemble full theta vector of length N
         let mut theta = vec![0.0; n];
@@ -350,8 +384,7 @@ mod tests {
     ///   P_line_01 = (0 - (-0.004)) / 0.06 * 100 = 6.66666667 MW
     ///   P_line_12 = (-0.004 - 0.006) / 0.03 * 100 = -33.33333333 MW
     ///   P_line_02 = (0 - 0.006) / 0.036 * 100 = -16.66666667 MW
-    #[test]
-    fn test_canonical_3bus_dc_power_flow_hand_calculated() {
+    fn build_canonical_3bus_network() -> Network {
         let mut net = Network::new(100.0);
 
         net.add_bus(Bus::new(0, BusType::Slack, 138.0)).unwrap();
@@ -371,6 +404,12 @@ mod tests {
         net.add_load(Load::new(0, 1, 40.0, 20.0)).unwrap();
         net.add_generator(Generator::new(1, 2, 50.0, 1.02)).unwrap();
 
+        net
+    }
+
+    #[test]
+    fn test_canonical_3bus_dc_power_flow_hand_calculated() {
+        let net = build_canonical_3bus_network();
         let result = DCPowerFlow::solve(&net).expect("DC power flow should solve");
 
         // Bus 0 (Slack)
@@ -429,5 +468,25 @@ mod tests {
 
         // Total losses must be zero
         assert_eq!(result.p_loss_mw, 0.0);
+    }
+
+    #[test]
+    fn test_dc_sparse_and_dense_produce_identical_results() {
+        let net = build_canonical_3bus_network();
+        let res_dense = DCPowerFlow::solve_with_solver(&net, LinearSolverKind::Dense).unwrap();
+        let res_sparse = DCPowerFlow::solve_with_solver(&net, LinearSolverKind::Sparse).unwrap();
+
+        for id in net.buses.keys() {
+            let b_d = &res_dense.bus_results[id];
+            let b_s = &res_sparse.bus_results[id];
+            assert!((b_d.va_rad - b_s.va_rad).abs() < 1e-14);
+            assert!((b_d.p_gen_mw - b_s.p_gen_mw).abs() < 1e-14);
+        }
+
+        for id in net.branches.keys() {
+            let f_d = &res_dense.branch_flows[id];
+            let f_s = &res_sparse.branch_flows[id];
+            assert!((f_d.p_from_mw - f_s.p_from_mw).abs() < 1e-14);
+        }
     }
 }

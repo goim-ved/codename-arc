@@ -52,11 +52,12 @@
 //!   $$L_{ii} = \frac{\partial Q_i}{\partial V_i} = \frac{Q_i(\mathbf{V}, \boldsymbol{\theta})}{V_i} - B_{ii} V_i$$
 
 use crate::admittance::YBus;
-use crate::linear::solve_dense_system;
+use crate::linear::{solve_dense_system, LinearSolverKind};
 use crate::model::{BusType, Network};
 use crate::solver::dc::SolverError;
+use crate::sparse::{CsrMatrix, TripletList};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Solved steady-state state for an individual bus under AC power flow.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -106,13 +107,15 @@ pub struct ACBranchFlow {
     pub q_loss_mvar: f64,
 }
 
-/// Options controlling Newton-Raphson convergence.
+/// Options controlling Newton-Raphson convergence and linear solver choice.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ACPowerFlowOptions {
     /// Maximum allowable iterations before reporting divergence.
     pub max_iterations: usize,
     /// Maximum absolute mismatch tolerance in per-unit ($||\Delta P, \Delta Q||_\infty$).
     pub tolerance: f64,
+    /// Linear equation solver algorithm (Sparse vs Dense).
+    pub solver_kind: LinearSolverKind,
 }
 
 impl Default for ACPowerFlowOptions {
@@ -120,6 +123,7 @@ impl Default for ACPowerFlowOptions {
         Self {
             max_iterations: 30,
             tolerance: 1e-8,
+            solver_kind: LinearSolverKind::Sparse,
         }
     }
 }
@@ -241,6 +245,26 @@ impl ACPowerFlow {
         let num_pq = pq_indices.len();
         let sys_dim = num_non_slack + num_pq;
 
+        // Precompute bus mappings and connected branch pairs
+        let mut non_slack_pos = BTreeMap::new();
+        for (pos, &b_idx) in non_slack_indices.iter().enumerate() {
+            non_slack_pos.insert(b_idx, pos);
+        }
+        let mut pq_pos = BTreeMap::new();
+        for (pos, &b_idx) in pq_indices.iter().enumerate() {
+            pq_pos.insert(b_idx, pos);
+        }
+
+        let mut connected_pairs = BTreeSet::new();
+        for branch in network.branches.values() {
+            if branch.status {
+                let &from_idx = bus_to_idx.get(&branch.from_bus).unwrap();
+                let &to_idx = bus_to_idx.get(&branch.to_bus).unwrap();
+                connected_pairs.insert((from_idx, to_idx));
+                connected_pairs.insert((to_idx, from_idx));
+            }
+        }
+
         let mut iterations = 0;
         let mut converged = false;
         let mut max_mismatch = 0.0;
@@ -300,89 +324,144 @@ impl ACPowerFlow {
                 break;
             }
 
-            // Step 4: Assemble dense Jacobian J = [ H  N ; M  L ]
-            let mut j = vec![0.0; sys_dim * sys_dim];
+            // Step 4 & 5: Assemble Jacobian and solve J * dx = mismatch
+            let dx = match options.solver_kind {
+                LinearSolverKind::Dense => {
+                    let mut j = vec![0.0; sys_dim * sys_dim];
 
-            // Mapping from bus index to position in subvectors
-            let mut non_slack_pos = BTreeMap::new();
-            for (pos, &b_idx) in non_slack_indices.iter().enumerate() {
-                non_slack_pos.insert(b_idx, pos);
-            }
-            let mut pq_pos = BTreeMap::new();
-            for (pos, &b_idx) in pq_indices.iter().enumerate() {
-                pq_pos.insert(b_idx, pos);
-            }
+                    // Submatrix H: dP / dtheta (num_non_slack x num_non_slack)
+                    for (r_pos, &i) in non_slack_indices.iter().enumerate() {
+                        for (c_pos, &k) in non_slack_indices.iter().enumerate() {
+                            let h_val = if i != k {
+                                let theta_ik = va[i] - va[k];
+                                let g_ik = ybus.g_entry(i, k);
+                                let b_ik = ybus.b_entry(i, k);
+                                vm[i] * vm[k] * (g_ik * theta_ik.sin() - b_ik * theta_ik.cos())
+                            } else {
+                                -q_calc[i] - ybus.b_entry(i, i) * vm[i] * vm[i]
+                            };
+                            j[r_pos * sys_dim + c_pos] = h_val;
+                        }
+                    }
 
-            // Submatrix H: dP / dtheta (num_non_slack x num_non_slack)
-            for (r_pos, &i) in non_slack_indices.iter().enumerate() {
-                for (c_pos, &k) in non_slack_indices.iter().enumerate() {
-                    let h_val = if i != k {
+                    // Submatrix N: dP / dV (num_non_slack x num_pq)
+                    for (r_pos, &i) in non_slack_indices.iter().enumerate() {
+                        for (c_pos, &k) in pq_indices.iter().enumerate() {
+                            let col_idx = num_non_slack + c_pos;
+                            let n_val = if i != k {
+                                let theta_ik = va[i] - va[k];
+                                let g_ik = ybus.g_entry(i, k);
+                                let b_ik = ybus.b_entry(i, k);
+                                vm[i] * (g_ik * theta_ik.cos() + b_ik * theta_ik.sin())
+                            } else {
+                                p_calc[i] / vm[i] + ybus.g_entry(i, i) * vm[i]
+                            };
+                            j[r_pos * sys_dim + col_idx] = n_val;
+                        }
+                    }
+
+                    // Submatrix M: dQ / dtheta (num_pq x num_non_slack)
+                    for (r_pos, &i) in pq_indices.iter().enumerate() {
+                        let row_idx = num_non_slack + r_pos;
+                        for (c_pos, &k) in non_slack_indices.iter().enumerate() {
+                            let m_val = if i != k {
+                                let theta_ik = va[i] - va[k];
+                                let g_ik = ybus.g_entry(i, k);
+                                let b_ik = ybus.b_entry(i, k);
+                                -vm[i] * vm[k] * (g_ik * theta_ik.cos() + b_ik * theta_ik.sin())
+                            } else {
+                                p_calc[i] - ybus.g_entry(i, i) * vm[i] * vm[i]
+                            };
+                            j[row_idx * sys_dim + c_pos] = m_val;
+                        }
+                    }
+
+                    // Submatrix L: dQ / dV (num_pq x num_pq)
+                    for (r_pos, &i) in pq_indices.iter().enumerate() {
+                        let row_idx = num_non_slack + r_pos;
+                        for (c_pos, &k) in pq_indices.iter().enumerate() {
+                            let col_idx = num_non_slack + c_pos;
+                            let l_val = if i != k {
+                                let theta_ik = va[i] - va[k];
+                                let g_ik = ybus.g_entry(i, k);
+                                let b_ik = ybus.b_entry(i, k);
+                                vm[i] * (g_ik * theta_ik.sin() - b_ik * theta_ik.cos())
+                            } else {
+                                q_calc[i] / vm[i] - ybus.b_entry(i, i) * vm[i]
+                            };
+                            j[row_idx * sys_dim + col_idx] = l_val;
+                        }
+                    }
+
+                    solve_dense_system(&j, &mismatch, sys_dim)?
+                }
+                LinearSolverKind::Sparse => {
+                    let mut trips = TripletList::with_capacity(sys_dim * 8);
+
+                    // 1. Diagonal elements
+                    for (r_pos, &i) in non_slack_indices.iter().enumerate() {
+                        let h_ii = -q_calc[i] - ybus.b_entry(i, i) * vm[i] * vm[i];
+                        trips.add(r_pos, r_pos, h_ii);
+
+                        if let Some(&pq_c) = pq_pos.get(&i) {
+                            let col_v = num_non_slack + pq_c;
+                            let row_q = num_non_slack + pq_c;
+
+                            let n_ii = p_calc[i] / vm[i] + ybus.g_entry(i, i) * vm[i];
+                            let m_ii = p_calc[i] - ybus.g_entry(i, i) * vm[i] * vm[i];
+                            let l_ii = q_calc[i] / vm[i] - ybus.b_entry(i, i) * vm[i];
+
+                            trips.add(r_pos, col_v, n_ii);
+                            trips.add(row_q, r_pos, m_ii);
+                            trips.add(row_q, col_v, l_ii);
+                        }
+                    }
+
+                    // 2. Off-diagonal elements for connected buses i != k
+                    for &(i, k) in &connected_pairs {
+                        if i == k {
+                            continue;
+                        }
                         let theta_ik = va[i] - va[k];
                         let g_ik = ybus.g_entry(i, k);
                         let b_ik = ybus.b_entry(i, k);
-                        vm[i] * vm[k] * (g_ik * theta_ik.sin() - b_ik * theta_ik.cos())
-                    } else {
-                        // -Q_i - B_ii * V_i^2
-                        -q_calc[i] - ybus.b_entry(i, i) * vm[i] * vm[i]
-                    };
-                    j[r_pos * sys_dim + c_pos] = h_val;
-                }
-            }
+                        if g_ik.abs() < 1e-15 && b_ik.abs() < 1e-15 {
+                            continue;
+                        }
 
-            // Submatrix N: dP / dV (num_non_slack x num_pq)
-            for (r_pos, &i) in non_slack_indices.iter().enumerate() {
-                for (c_pos, &k) in pq_indices.iter().enumerate() {
-                    let col_idx = num_non_slack + c_pos;
-                    let n_val = if i != k {
-                        let theta_ik = va[i] - va[k];
-                        let g_ik = ybus.g_entry(i, k);
-                        let b_ik = ybus.b_entry(i, k);
-                        vm[i] * (g_ik * theta_ik.cos() + b_ik * theta_ik.sin())
-                    } else {
-                        // P_i / V_i + G_ii * V_i
-                        p_calc[i] / vm[i] + ybus.g_entry(i, i) * vm[i]
-                    };
-                    j[r_pos * sys_dim + col_idx] = n_val;
-                }
-            }
+                        let sin_ik = theta_ik.sin();
+                        let cos_ik = theta_ik.cos();
 
-            // Submatrix M: dQ / dtheta (num_pq x num_non_slack)
-            for (r_pos, &i) in pq_indices.iter().enumerate() {
-                let row_idx = num_non_slack + r_pos;
-                for (c_pos, &k) in non_slack_indices.iter().enumerate() {
-                    let m_val = if i != k {
-                        let theta_ik = va[i] - va[k];
-                        let g_ik = ybus.g_entry(i, k);
-                        let b_ik = ybus.b_entry(i, k);
-                        -vm[i] * vm[k] * (g_ik * theta_ik.cos() + b_ik * theta_ik.sin())
-                    } else {
-                        // P_i - G_ii * V_i^2
-                        p_calc[i] - ybus.g_entry(i, i) * vm[i] * vm[i]
-                    };
-                    j[row_idx * sys_dim + c_pos] = m_val;
-                }
-            }
+                        let r_pos_i = non_slack_pos.get(&i);
+                        let c_pos_k = non_slack_pos.get(&k);
+                        let pq_pos_i = pq_pos.get(&i);
+                        let pq_pos_k = pq_pos.get(&k);
 
-            // Submatrix L: dQ / dV (num_pq x num_pq)
-            for (r_pos, &i) in pq_indices.iter().enumerate() {
-                let row_idx = num_non_slack + r_pos;
-                for (c_pos, &k) in pq_indices.iter().enumerate() {
-                    let col_idx = num_non_slack + c_pos;
-                    let l_val = if i != k {
-                        let theta_ik = va[i] - va[k];
-                        let g_ik = ybus.g_entry(i, k);
-                        let b_ik = ybus.b_entry(i, k);
-                        vm[i] * (g_ik * theta_ik.sin() - b_ik * theta_ik.cos())
-                    } else {
-                        // Q_i / V_i - B_ii * V_i
-                        q_calc[i] / vm[i] - ybus.b_entry(i, i) * vm[i]
-                    };
-                    j[row_idx * sys_dim + col_idx] = l_val;
-                }
-            }
+                        if let (Some(&r_i), Some(&c_k)) = (r_pos_i, c_pos_k) {
+                            let h_ik = vm[i] * vm[k] * (g_ik * sin_ik - b_ik * cos_ik);
+                            trips.add(r_i, c_k, h_ik);
+                        }
 
-            // Step 5: Solve J * dx = mismatch via deterministic linear solver
-            let dx = solve_dense_system(&j, &mismatch, sys_dim)?;
+                        if let (Some(&r_i), Some(&c_k)) = (r_pos_i, pq_pos_k) {
+                            let n_ik = vm[i] * (g_ik * cos_ik + b_ik * sin_ik);
+                            trips.add(r_i, num_non_slack + c_k, n_ik);
+                        }
+
+                        if let (Some(&r_i), Some(&c_k)) = (pq_pos_i, c_pos_k) {
+                            let m_ik = -vm[i] * vm[k] * (g_ik * cos_ik + b_ik * sin_ik);
+                            trips.add(num_non_slack + r_i, c_k, m_ik);
+                        }
+
+                        if let (Some(&r_i), Some(&c_k)) = (pq_pos_i, pq_pos_k) {
+                            let l_ik = vm[i] * (g_ik * sin_ik - b_ik * cos_ik);
+                            trips.add(num_non_slack + r_i, num_non_slack + c_k, l_ik);
+                        }
+                    }
+
+                    let j_csr = CsrMatrix::from_triplets(sys_dim, sys_dim, trips.as_slice())?;
+                    j_csr.solve(&mismatch)?
+                }
+            };
 
             // Step 6: Update state variables
             for (pos, &i) in non_slack_indices.iter().enumerate() {
@@ -581,5 +660,45 @@ mod tests {
         let b2 = &result.bus_results[&2];
         assert_eq!(b2.vm_pu, 1.02);
         assert!((b2.va_deg - (-0.0117)).abs() < 1e-3);
+    }
+
+    #[test]
+    fn test_ac_sparse_and_dense_produce_identical_results() {
+        let mut net = Network::new(100.0);
+        net.add_bus(Bus::new(0, BusType::Slack, 138.0)).unwrap();
+        net.add_bus(Bus::new(1, BusType::PQ, 138.0)).unwrap();
+        net.add_bus(Bus::new(2, BusType::PV, 138.0).with_vm_pu(1.02))
+            .unwrap();
+        net.add_branch(Branch::new_line(0, 0, 1, 0.02, 0.06))
+            .unwrap();
+        net.add_branch(Branch::new_line(1, 1, 2, 0.01, 0.03))
+            .unwrap();
+        net.add_branch(Branch::new_line(2, 0, 2, 0.012, 0.036))
+            .unwrap();
+        net.add_generator(Generator::new(0, 0, 0.0, 1.0)).unwrap();
+        net.add_load(Load::new(0, 1, 40.0, 20.0)).unwrap();
+        net.add_generator(Generator::new(1, 2, 50.0, 1.02)).unwrap();
+
+        let opt_dense = ACPowerFlowOptions {
+            solver_kind: LinearSolverKind::Dense,
+            ..Default::default()
+        };
+        let opt_sparse = ACPowerFlowOptions {
+            solver_kind: LinearSolverKind::Sparse,
+            ..Default::default()
+        };
+
+        let res_dense = ACPowerFlow::solve_with_options(&net, &opt_dense).unwrap();
+        let res_sparse = ACPowerFlow::solve_with_options(&net, &opt_sparse).unwrap();
+
+        assert_eq!(res_dense.iterations, res_sparse.iterations);
+        for id in net.buses.keys() {
+            let b_d = &res_dense.bus_results[id];
+            let b_s = &res_sparse.bus_results[id];
+            assert!((b_d.vm_pu - b_s.vm_pu).abs() < 1e-12);
+            assert!((b_d.va_rad - b_s.va_rad).abs() < 1e-12);
+            assert!((b_d.p_gen_mw - b_s.p_gen_mw).abs() < 1e-12);
+            assert!((b_d.q_gen_mvar - b_s.q_gen_mvar).abs() < 1e-12);
+        }
     }
 }
