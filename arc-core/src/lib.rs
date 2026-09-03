@@ -12,6 +12,7 @@ pub mod model;
 pub mod parser;
 pub mod regression;
 pub mod solver;
+pub mod sparse;
 
 pub use admittance::YBus;
 pub use linear::{solve_dense_system, LinearSolverError};
@@ -24,6 +25,7 @@ pub use solver::{
     ACBranchFlow, ACBusResult, ACPowerFlow, ACPowerFlowOptions, ACPowerFlowResult, DCBranchFlow,
     DCBusResult, DCPowerFlow, DCPowerFlowResult, SolverError,
 };
+pub use sparse::{CsrMatrix, SparseError, TripletList};
 
 #[cfg(test)]
 mod tests {
