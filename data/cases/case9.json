@@ -1,0 +1,282 @@
+{
+  "base_mva": 100.0,
+  "buses": {
+    "0": {
+      "id": 0,
+      "name": "Bus 1",
+      "bus_type": "Slack",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "1": {
+      "id": 1,
+      "name": "Bus 2",
+      "bus_type": "PV",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "2": {
+      "id": 2,
+      "name": "Bus 3",
+      "bus_type": "PV",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "3": {
+      "id": 3,
+      "name": "Bus 4",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "4": {
+      "id": 4,
+      "name": "Bus 5",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "5": {
+      "id": 5,
+      "name": "Bus 6",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "6": {
+      "id": 6,
+      "name": "Bus 7",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "7": {
+      "id": 7,
+      "name": "Bus 8",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    },
+    "8": {
+      "id": 8,
+      "name": "Bus 9",
+      "bus_type": "PQ",
+      "base_kv": 345.0,
+      "vm_pu": 1.0,
+      "va_rad": 0.0,
+      "v_min_pu": 0.0,
+      "v_max_pu": 2.0
+    }
+  },
+  "branches": {
+    "0": {
+      "id": 0,
+      "name": "Branch 1-4",
+      "from_bus": 0,
+      "to_bus": 3,
+      "r_pu": 0.0,
+      "x_pu": 0.05759999999999999,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    },
+    "1": {
+      "id": 1,
+      "name": "Branch 4-5",
+      "from_bus": 3,
+      "to_bus": 4,
+      "r_pu": 0.017,
+      "x_pu": 0.092,
+      "b_pu": 0.15800000000000003,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    },
+    "2": {
+      "id": 2,
+      "name": "Branch 5-6",
+      "from_bus": 4,
+      "to_bus": 5,
+      "r_pu": 0.039,
+      "x_pu": 0.17,
+      "b_pu": 0.358,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 149.9999999999985,
+      "status": true
+    },
+    "3": {
+      "id": 3,
+      "name": "Branch 3-6",
+      "from_bus": 2,
+      "to_bus": 5,
+      "r_pu": 0.0,
+      "x_pu": 0.0586,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 300.00000000000296,
+      "status": true
+    },
+    "4": {
+      "id": 4,
+      "name": "Branch 6-7",
+      "from_bus": 5,
+      "to_bus": 6,
+      "r_pu": 0.0119,
+      "x_pu": 0.1008,
+      "b_pu": 0.20900000000000005,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 149.9999999999985,
+      "status": true
+    },
+    "5": {
+      "id": 5,
+      "name": "Branch 7-8",
+      "from_bus": 6,
+      "to_bus": 7,
+      "r_pu": 0.0085,
+      "x_pu": 0.072,
+      "b_pu": 0.14900000000000002,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    },
+    "6": {
+      "id": 6,
+      "name": "Branch 8-2",
+      "from_bus": 7,
+      "to_bus": 1,
+      "r_pu": 0.0,
+      "x_pu": 0.0625,
+      "b_pu": 0.0,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    },
+    "7": {
+      "id": 7,
+      "name": "Branch 8-9",
+      "from_bus": 7,
+      "to_bus": 8,
+      "r_pu": 0.032,
+      "x_pu": 0.161,
+      "b_pu": 0.306,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    },
+    "8": {
+      "id": 8,
+      "name": "Branch 9-4",
+      "from_bus": 8,
+      "to_bus": 3,
+      "r_pu": 0.01,
+      "x_pu": 0.085,
+      "b_pu": 0.17600000000000002,
+      "tap_ratio": 1.0,
+      "shift_rad": 0.0,
+      "rating_mva": 250.0000000000015,
+      "status": true
+    }
+  },
+  "generators": {
+    "0": {
+      "id": 0,
+      "name": "Gen 1 at Bus 1",
+      "bus": 0,
+      "p_mw": 71.95470158111694,
+      "q_mvar": 24.068957746645836,
+      "vm_pu": 1.0,
+      "p_min_mw": -1000000000.0,
+      "p_max_mw": 1000000000.0,
+      "q_min_mvar": 0.0,
+      "q_max_mvar": 0.0,
+      "status": true
+    },
+    "1": {
+      "id": 1,
+      "name": "Gen 2 at Bus 2",
+      "bus": 1,
+      "p_mw": 163.0,
+      "q_mvar": 14.460119515851943,
+      "vm_pu": 1.0,
+      "p_min_mw": 10.0,
+      "p_max_mw": 300.0,
+      "q_min_mvar": -300.0,
+      "q_max_mvar": 300.0,
+      "status": true
+    },
+    "2": {
+      "id": 2,
+      "name": "Gen 3 at Bus 3",
+      "bus": 2,
+      "p_mw": 85.0,
+      "q_mvar": -3.649025542676668,
+      "vm_pu": 1.0,
+      "p_min_mw": 10.0,
+      "p_max_mw": 270.0,
+      "q_min_mvar": -300.0,
+      "q_max_mvar": 300.0,
+      "status": true
+    }
+  },
+  "loads": {
+    "0": {
+      "id": 0,
+      "name": "Load 5",
+      "bus": 4,
+      "p_mw": 90.0,
+      "q_mvar": 30.0,
+      "status": true
+    },
+    "1": {
+      "id": 1,
+      "name": "Load 7",
+      "bus": 6,
+      "p_mw": 100.0,
+      "q_mvar": 35.0,
+      "status": true
+    },
+    "2": {
+      "id": 2,
+      "name": "Load 9",
+      "bus": 8,
+      "p_mw": 125.0,
+      "q_mvar": 50.0,
+      "status": true
+    }
+  },
+  "shunts": {}
+}
